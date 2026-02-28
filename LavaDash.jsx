@@ -8,6 +8,7 @@ const GRAVITY = 0.65;
 const JUMP_FORCE = -12;
 const GAME_SPEED_BASE = 5;
 const PARTICLE_COUNT = 20;
+const REVIVE_FRAMES = 180; // 3 seconds at 60fps
 
 // 8-bit chiptune sound generator
 const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
@@ -53,6 +54,16 @@ function playSound(type) {
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
       osc.start();
       osc.stop(ctx.currentTime + 0.08);
+    } else if (type === "revive") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(330, ctx.currentTime);
+      osc.frequency.setValueAtTime(440, ctx.currentTime + 0.07);
+      osc.frequency.setValueAtTime(550, ctx.currentTime + 0.14);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.21);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
     }
   } catch (e) {}
 }
@@ -87,7 +98,8 @@ function generateObstacle(x, level) {
   return patterns[Math.floor(Math.random() * maxIdx)];
 }
 
-function createParticles(x, y) {
+function createParticles(x, y, colors) {
+  const particleColors = colors || ["#ff4500", "#ff6b35", "#ffa500", "#ffcc00", "#ff0000"];
   return Array.from({ length: PARTICLE_COUNT }, () => ({
     x,
     y,
@@ -95,15 +107,29 @@ function createParticles(x, y) {
     vy: (Math.random() - 1) * 8,
     life: 1,
     size: Math.random() * 6 + 2,
-    color: ["#ff4500", "#ff6b35", "#ffa500", "#ffcc00", "#ff0000"][Math.floor(Math.random() * 5)],
+    color: particleColors[Math.floor(Math.random() * particleColors.length)],
   }));
+}
+
+function createPlayer(x, id) {
+  return {
+    id,
+    x,
+    y: GROUND_Y - CUBE_SIZE,
+    vy: 0,
+    rotation: 0,
+    grounded: true,
+    alive: true,
+    ghostTimer: 0, // counts up when dead, revives at REVIVE_FRAMES
+  };
 }
 
 export default function LavaDash() {
   const canvasRef = useRef(null);
   const gameRef = useRef({
     state: "menu", // menu, playing, dead
-    cube: { x: 120, y: GROUND_Y - CUBE_SIZE, vy: 0, rotation: 0, grounded: true },
+    p1: createPlayer(100, 1),
+    p2: createPlayer(170, 2),
     obstacles: [],
     lavaDrops: [],
     bgLava: [],
@@ -118,6 +144,7 @@ export default function LavaDash() {
     beatTimer: 0,
     screenShake: 0,
     groundOffset: 0,
+    frameCount: 0,
     starField: Array.from({ length: 30 }, () => ({
       x: Math.random() * GAME_WIDTH,
       y: Math.random() * 200,
@@ -130,11 +157,12 @@ export default function LavaDash() {
   const [displayScore, setDisplayScore] = useState(0);
   const [displayHigh, setDisplayHigh] = useState(0);
 
-  const jump = useCallback(() => {
+  const startGame = useCallback(() => {
     const g = gameRef.current;
     if (g.state === "menu") {
       g.state = "playing";
-      g.cube = { x: 120, y: GROUND_Y - CUBE_SIZE, vy: 0, rotation: 0, grounded: true };
+      g.p1 = createPlayer(100, 1);
+      g.p2 = createPlayer(170, 2);
       g.obstacles = [];
       g.particles = [];
       g.score = 0;
@@ -142,28 +170,74 @@ export default function LavaDash() {
       g.nextObstacle = 400;
       g.gameSpeed = GAME_SPEED_BASE;
       g.level = 1;
+      g.frameCount = 0;
       setDisplayState("playing");
       setDisplayScore(0);
-    } else if (g.state === "playing" && g.cube.grounded) {
-      g.cube.vy = JUMP_FORCE;
-      g.cube.grounded = false;
-      playSound("jump");
     } else if (g.state === "dead") {
       g.state = "menu";
       setDisplayState("menu");
     }
   }, []);
 
+  const jumpPlayer = useCallback((playerNum) => {
+    const g = gameRef.current;
+    if (g.state === "menu" || g.state === "dead") {
+      startGame();
+      return;
+    }
+    if (g.state === "playing") {
+      const player = playerNum === 1 ? g.p1 : g.p2;
+      if (player.alive && player.grounded) {
+        player.vy = JUMP_FORCE;
+        player.grounded = false;
+        playSound("jump");
+      }
+    }
+  }, [startGame]);
+
+  const jumpBoth = useCallback(() => {
+    const g = gameRef.current;
+    if (g.state === "menu" || g.state === "dead") {
+      startGame();
+      return;
+    }
+    if (g.state === "playing") {
+      let jumped = false;
+      if (g.p1.alive && g.p1.grounded) {
+        g.p1.vy = JUMP_FORCE;
+        g.p1.grounded = false;
+        jumped = true;
+      }
+      if (g.p2.alive && g.p2.grounded) {
+        g.p2.vy = JUMP_FORCE;
+        g.p2.grounded = false;
+        jumped = true;
+      }
+      if (jumped) playSound("jump");
+    }
+  }, [startGame]);
+
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.code === "Space" || e.code === "ArrowUp" || e.key === "w" || e.key === "W") {
+      if (e.code === "ShiftLeft") {
         e.preventDefault();
-        jump();
+        jumpPlayer(1);
+      } else if (e.code === "ShiftRight") {
+        e.preventDefault();
+        jumpPlayer(2);
+      } else if (e.code === "Space") {
+        e.preventDefault();
+        const g = gameRef.current;
+        if (g.state === "menu" || g.state === "dead") {
+          startGame();
+        } else {
+          jumpBoth();
+        }
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [jump]);
+  }, [jumpPlayer, jumpBoth, startGame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -239,26 +313,47 @@ export default function LavaDash() {
       ctx.shadowBlur = 0;
     }
 
-    function drawCube(ctx, cube) {
+    function drawCube(ctx, player, isGhost, frameCount) {
+      const isP1 = player.id === 1;
+      // Color config
+      const gradStart = isP1 ? "#ffaa00" : "#00ccff";
+      const gradEnd = isP1 ? "#ff6600" : "#0066ff";
+      const glowColor = isP1 ? "#ff8800" : "#0088ff";
+      const borderColor = isP1 ? "#ffcc44" : "#66ddff";
+
+      let drawX = player.x;
+      let drawY = player.y;
+
+      if (isGhost) {
+        // Ghost bob effect
+        const bob = Math.sin(frameCount * 0.08) * 4;
+        drawY = player.y + bob;
+      }
+
       ctx.save();
-      const cx = cube.x + CUBE_SIZE / 2;
-      const cy = cube.y + CUBE_SIZE / 2;
+
+      if (isGhost) {
+        ctx.globalAlpha = 0.3;
+      }
+
+      const cx = drawX + CUBE_SIZE / 2;
+      const cy = drawY + CUBE_SIZE / 2;
       ctx.translate(cx, cy);
-      ctx.rotate(cube.rotation);
+      ctx.rotate(player.rotation);
 
       // Cube glow
-      ctx.shadowColor = "#ff8800";
+      ctx.shadowColor = glowColor;
       ctx.shadowBlur = 15;
 
       // Main cube
       const cubeGrad = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-      cubeGrad.addColorStop(0, "#ffaa00");
-      cubeGrad.addColorStop(1, "#ff6600");
+      cubeGrad.addColorStop(0, gradStart);
+      cubeGrad.addColorStop(1, gradEnd);
       ctx.fillStyle = cubeGrad;
       ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
 
       // Border
-      ctx.strokeStyle = "#ffcc44";
+      ctx.strokeStyle = borderColor;
       ctx.lineWidth = 2;
       ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
 
@@ -274,8 +369,186 @@ export default function LavaDash() {
       ctx.restore();
     }
 
+    function drawGhostCountdown(ctx, player, frameCount) {
+      if (!player.alive && player.ghostTimer < REVIVE_FRAMES) {
+        const remaining = Math.ceil((REVIVE_FRAMES - player.ghostTimer) / 60);
+        const bob = Math.sin(frameCount * 0.08) * 4;
+        const drawY = player.y + bob;
+
+        ctx.save();
+        ctx.font = "bold 22px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.fillStyle = player.id === 1 ? "#ffaa00" : "#00ccff";
+        ctx.shadowColor = player.id === 1 ? "#ff6600" : "#0066ff";
+        ctx.shadowBlur = 10;
+        ctx.fillText(remaining.toString(), player.x + CUBE_SIZE / 2, drawY - 12);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+
+    function checkCollision(player, obstacles) {
+      const cubeL = player.x + 6;
+      const cubeR = player.x + CUBE_SIZE - 6;
+      const cubeT = player.y + 6;
+      const cubeB = player.y + CUBE_SIZE - 4;
+
+      for (const o of obstacles) {
+        if (o.type === "spike") {
+          const spikeTop = o.y - o.h;
+          const triL = o.x + 4;
+          const triR = o.x + o.w - 4;
+          if (cubeR > triL && cubeL < triR && cubeB > spikeTop + 10 && cubeT < o.y) {
+            return true;
+          }
+        } else if (o.type === "block") {
+          if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function updatePlayer(player) {
+      if (!player.alive) return;
+      player.vy += GRAVITY;
+      player.y += player.vy;
+      if (player.y >= GROUND_Y - CUBE_SIZE) {
+        player.y = GROUND_Y - CUBE_SIZE;
+        player.vy = 0;
+        player.grounded = true;
+      }
+      // Rotation
+      if (!player.grounded) {
+        player.rotation += 0.08;
+      } else {
+        player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+      }
+    }
+
+    function killPlayer(g, player) {
+      player.alive = false;
+      player.ghostTimer = 0;
+      g.screenShake = 12;
+      const colors = player.id === 1
+        ? ["#ff4500", "#ff6b35", "#ffa500", "#ffcc00", "#ff0000"]
+        : ["#0088ff", "#00bbff", "#00ccff", "#66ddff", "#0044cc"];
+      g.particles.push(...createParticles(player.x + CUBE_SIZE / 2, player.y + CUBE_SIZE / 2, colors));
+      playSound("death");
+    }
+
+    function revivePlayer(g, deadPlayer, alivePlayer) {
+      deadPlayer.alive = true;
+      deadPlayer.ghostTimer = 0;
+      deadPlayer.vy = 0;
+      deadPlayer.grounded = true;
+      deadPlayer.rotation = 0;
+      // Respawn next to alive player
+      if (alivePlayer && alivePlayer.alive) {
+        deadPlayer.x = alivePlayer.x + (deadPlayer.id === 1 ? -70 : 70);
+        // Clamp to screen
+        if (deadPlayer.x < 30) deadPlayer.x = 30;
+        if (deadPlayer.x > GAME_WIDTH - 100) deadPlayer.x = GAME_WIDTH - 100;
+      }
+      deadPlayer.y = GROUND_Y - CUBE_SIZE;
+      playSound("revive");
+    }
+
+    function drawMenuCubes(ctx, frameCount) {
+      // Draw P1 orange cube
+      const p1x = GAME_WIDTH / 2 - 55;
+      const p1y = 175 + Math.sin(frameCount * 0.04) * 5;
+      ctx.save();
+      ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
+      ctx.rotate(Math.sin(frameCount * 0.02) * 0.15);
+      ctx.shadowColor = "#ff8800";
+      ctx.shadowBlur = 15;
+      const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+      g1.addColorStop(0, "#ffaa00");
+      g1.addColorStop(1, "#ff6600");
+      ctx.fillStyle = g1;
+      ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+      ctx.strokeStyle = "#ffcc44";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(4, -10, 12, 12);
+      ctx.fillStyle = "#111";
+      ctx.fillRect(9, -7, 6, 6);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(11, -6, 2, 2);
+      ctx.restore();
+
+      // P1 label
+      ctx.save();
+      ctx.font = "bold 12px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffaa00";
+      ctx.fillText("P1", p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE + 16);
+      ctx.restore();
+
+      // Draw P2 blue cube
+      const p2x = GAME_WIDTH / 2 + 20;
+      const p2y = 175 + Math.sin(frameCount * 0.04 + 1) * 5;
+      ctx.save();
+      ctx.translate(p2x + CUBE_SIZE / 2, p2y + CUBE_SIZE / 2);
+      ctx.rotate(Math.sin(frameCount * 0.02 + 1) * 0.15);
+      ctx.shadowColor = "#0088ff";
+      ctx.shadowBlur = 15;
+      const g2 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+      g2.addColorStop(0, "#00ccff");
+      g2.addColorStop(1, "#0066ff");
+      ctx.fillStyle = g2;
+      ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+      ctx.strokeStyle = "#66ddff";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(4, -10, 12, 12);
+      ctx.fillStyle = "#111";
+      ctx.fillRect(9, -7, 6, 6);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(11, -6, 2, 2);
+      ctx.restore();
+
+      // P2 label
+      ctx.save();
+      ctx.font = "bold 12px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#00ccff";
+      ctx.fillText("P2", p2x + CUBE_SIZE / 2, p2y + CUBE_SIZE + 16);
+      ctx.restore();
+    }
+
+    function drawPlayerStatus(ctx, g) {
+      // P1 status
+      ctx.save();
+      const statusY = 10;
+      const statusH = 22;
+
+      // P1
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillRect(GAME_WIDTH - 200, statusY, 90, statusH);
+      ctx.font = "bold 12px 'Courier New', monospace";
+      ctx.textAlign = "left";
+      ctx.fillStyle = g.p1.alive ? "#ffaa00" : "#884400";
+      ctx.fillText(g.p1.alive ? "P1: ALIVE" : "P1: DEAD", GAME_WIDTH - 195, statusY + 15);
+
+      // P2
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillRect(GAME_WIDTH - 105, statusY, 90, statusH);
+      ctx.fillStyle = g.p2.alive ? "#00ccff" : "#004488";
+      ctx.fillText(g.p2.alive ? "P2: ALIVE" : "P2: DEAD", GAME_WIDTH - 100, statusY + 15);
+
+      ctx.restore();
+    }
+
     function gameLoop() {
       const g = gameRef.current;
+      g.frameCount++;
       const shake = g.screenShake > 0 ? (Math.random() - 0.5) * g.screenShake : 0;
       const shakeY = g.screenShake > 0 ? (Math.random() - 0.5) * g.screenShake : 0;
       if (g.screenShake > 0) g.screenShake *= 0.9;
@@ -370,21 +643,9 @@ export default function LavaDash() {
         g.score = Math.floor(g.distance / 10);
         setDisplayScore(g.score);
 
-        // Physics
-        g.cube.vy += GRAVITY;
-        g.cube.y += g.cube.vy;
-        if (g.cube.y >= GROUND_Y - CUBE_SIZE) {
-          g.cube.y = GROUND_Y - CUBE_SIZE;
-          g.cube.vy = 0;
-          g.cube.grounded = true;
-        }
-
-        // Rotation
-        if (!g.cube.grounded) {
-          g.cube.rotation += 0.08;
-        } else {
-          g.cube.rotation = Math.round(g.cube.rotation / (Math.PI / 2)) * (Math.PI / 2);
-        }
+        // Physics for both players
+        updatePlayer(g.p1);
+        updatePlayer(g.p2);
 
         // Generate obstacles
         g.nextObstacle -= g.gameSpeed;
@@ -395,44 +656,49 @@ export default function LavaDash() {
           if (g.nextObstacle < 140) g.nextObstacle = 140;
         }
 
-        // Move & draw obstacles
+        // Move obstacles
         g.obstacles.forEach((o) => {
           o.x -= g.gameSpeed;
         });
         g.obstacles = g.obstacles.filter((o) => o.x > -60);
 
-        // Collision
-        const cubeL = g.cube.x + 6;
-        const cubeR = g.cube.x + CUBE_SIZE - 6;
-        const cubeT = g.cube.y + 6;
-        const cubeB = g.cube.y + CUBE_SIZE - 4;
+        // Collision for P1
+        if (g.p1.alive && checkCollision(g.p1, g.obstacles)) {
+          killPlayer(g, g.p1);
+          // Check if both are dead
+          if (!g.p2.alive) {
+            // Both dead = game over
+            g.state = "dead";
+            if (g.score > g.highScore) g.highScore = g.score;
+            setDisplayHigh(g.highScore);
+            setDisplayState("dead");
+          }
+        }
 
-        for (const o of g.obstacles) {
-          if (o.type === "spike") {
-            // Triangle collision (simplified)
-            const spikeCx = o.x + o.w / 2;
-            const spikeTop = o.y - o.h;
-            const triL = o.x + 4;
-            const triR = o.x + o.w - 4;
-            if (cubeR > triL && cubeL < triR && cubeB > spikeTop + 10 && cubeT < o.y) {
-              g.state = "dead";
-              g.screenShake = 12;
-              g.particles = createParticles(g.cube.x + CUBE_SIZE / 2, g.cube.y + CUBE_SIZE / 2);
-              if (g.score > g.highScore) g.highScore = g.score;
-              setDisplayHigh(g.highScore);
-              setDisplayState("dead");
-              playSound("death");
-            }
-          } else if (o.type === "block") {
-            if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
-              g.state = "dead";
-              g.screenShake = 12;
-              g.particles = createParticles(g.cube.x + CUBE_SIZE / 2, g.cube.y + CUBE_SIZE / 2);
-              if (g.score > g.highScore) g.highScore = g.score;
-              setDisplayHigh(g.highScore);
-              setDisplayState("dead");
-              playSound("death");
-            }
+        // Collision for P2
+        if (g.p2.alive && checkCollision(g.p2, g.obstacles)) {
+          killPlayer(g, g.p2);
+          // Check if both are dead
+          if (!g.p1.alive) {
+            // Both dead = game over
+            g.state = "dead";
+            if (g.score > g.highScore) g.highScore = g.score;
+            setDisplayHigh(g.highScore);
+            setDisplayState("dead");
+          }
+        }
+
+        // Ghost/revive timers
+        if (!g.p1.alive && g.state === "playing") {
+          g.p1.ghostTimer++;
+          if (g.p1.ghostTimer >= REVIVE_FRAMES) {
+            revivePlayer(g, g.p1, g.p2);
+          }
+        }
+        if (!g.p2.alive && g.state === "playing") {
+          g.p2.ghostTimer++;
+          if (g.p2.ghostTimer >= REVIVE_FRAMES) {
+            revivePlayer(g, g.p2, g.p1);
           }
         }
       }
@@ -456,9 +722,25 @@ export default function LavaDash() {
       });
       ctx.globalAlpha = 1;
 
-      // Draw cube (only if playing or menu)
-      if (g.state !== "dead") {
-        drawCube(ctx, g.cube);
+      // Draw cubes
+      if (g.state === "playing") {
+        // Draw alive players solid, dead as ghosts
+        if (g.p1.alive) {
+          drawCube(ctx, g.p1, false, g.frameCount);
+        } else {
+          drawCube(ctx, g.p1, true, g.frameCount);
+          drawGhostCountdown(ctx, g.p1, g.frameCount);
+        }
+        if (g.p2.alive) {
+          drawCube(ctx, g.p2, false, g.frameCount);
+        } else {
+          drawCube(ctx, g.p2, true, g.frameCount);
+          drawGhostCountdown(ctx, g.p2, g.frameCount);
+        }
+      } else if (g.state === "menu") {
+        // Draw both cubes on ground in menu (idle)
+        drawCube(ctx, g.p1, false, g.frameCount);
+        drawCube(ctx, g.p2, false, g.frameCount);
       }
 
       // Ambient lava particles
@@ -499,24 +781,33 @@ export default function LavaDash() {
         ctx.font = "bold 52px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ff6600";
-        ctx.fillText("🌋 LAVA DASH", GAME_WIDTH / 2, 140);
+        ctx.fillText("\u{1F30B} LAVA DASH", GAME_WIDTH / 2, 120);
         ctx.shadowBlur = 0;
 
-        ctx.font = "bold 18px 'Courier New', monospace";
-        ctx.fillStyle = "#ffaa44";
+        // Co-op subtitle
+        ctx.font = "bold 16px 'Courier New', monospace";
+        ctx.fillStyle = "#ff9966";
+        ctx.fillText("2-PLAYER CO-OP", GAME_WIDTH / 2, 148);
+
+        // Draw menu cubes
+        drawMenuCubes(ctx, g.frameCount);
+
+        ctx.font = "bold 16px 'Courier New', monospace";
+        ctx.textAlign = "center";
         const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.4;
         ctx.globalAlpha = pulse;
-        ctx.fillText("TAP / SPACE / ↑ TO START", GAME_WIDTH / 2, 240);
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillText("LEFT SHIFT (P1) / RIGHT SHIFT (P2) TO START", GAME_WIDTH / 2, 245);
         ctx.globalAlpha = 1;
 
         ctx.font = "14px 'Courier New', monospace";
         ctx.fillStyle = "#cc8844";
-        ctx.fillText("Jump over obstacles! Don't touch the lava spikes!", GAME_WIDTH / 2, 290);
+        ctx.fillText("Jump over obstacles together! Revive your partner!", GAME_WIDTH / 2, 280);
 
         if (g.highScore > 0) {
           ctx.font = "bold 16px 'Courier New', monospace";
           ctx.fillStyle = "#ffcc00";
-          ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 330);
+          ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 320);
         }
         ctx.restore();
       }
@@ -531,22 +822,26 @@ export default function LavaDash() {
         ctx.font = "bold 48px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ff3300";
-        ctx.fillText("GAME OVER", GAME_WIDTH / 2, 150);
+        ctx.fillText("GAME OVER", GAME_WIDTH / 2, 130);
         ctx.shadowBlur = 0;
 
+        // Draw both cubes on game over screen
+        drawMenuCubes(ctx, g.frameCount);
+
         ctx.font = "bold 28px 'Courier New', monospace";
+        ctx.textAlign = "center";
         ctx.fillStyle = "#ffaa00";
-        ctx.fillText(`SCORE: ${g.score}`, GAME_WIDTH / 2, 210);
+        ctx.fillText(`SCORE: ${g.score}`, GAME_WIDTH / 2, 265);
 
         ctx.font = "bold 18px 'Courier New', monospace";
         ctx.fillStyle = "#ffcc44";
-        ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 250);
+        ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 300);
 
         ctx.font = "bold 16px 'Courier New', monospace";
         ctx.fillStyle = "#ff8844";
         const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
         ctx.globalAlpha = pulse;
-        ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, 310);
+        ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, 350);
         ctx.globalAlpha = 1;
         ctx.restore();
       }
@@ -569,6 +864,9 @@ export default function LavaDash() {
         ctx.fillStyle = "#ff6644";
         ctx.fillText(`LVL ${g.level}`, 20, 62);
         ctx.restore();
+
+        // Player status indicators
+        drawPlayerStatus(ctx, g);
       }
 
       ctx.restore();
@@ -602,16 +900,16 @@ export default function LavaDash() {
           opacity: 0.7,
         }}
       >
-        🌋 Lava Dash — Built by Father & Son 🎮
+        {"\u{1F30B}"} Lava Dash — Built by Father & Son {"\u{1F3AE}"}
       </div>
       <canvas
         ref={canvasRef}
         width={GAME_WIDTH}
         height={GAME_HEIGHT}
-        onClick={jump}
+        onClick={jumpBoth}
         onTouchStart={(e) => {
           e.preventDefault();
-          jump();
+          jumpBoth();
         }}
         style={{
           border: "2px solid #ff440055",
@@ -629,7 +927,7 @@ export default function LavaDash() {
           letterSpacing: 1,
         }}
       >
-        SPACE / ↑ / TAP to jump
+        LEFT SHIFT = P1 JUMP | RIGHT SHIFT = P2 JUMP
       </div>
     </div>
   );
