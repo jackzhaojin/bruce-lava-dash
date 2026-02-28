@@ -4,11 +4,11 @@ const GAME_WIDTH = 800;
 const GAME_HEIGHT = 450;
 const GROUND_Y = 370;
 const CUBE_SIZE = 36;
-const GRAVITY = 0.65;
+const GRAVITY = 0.55; // reduced from 0.65 (20% easier - more airtime)
 const JUMP_FORCE = -12;
-const GAME_SPEED_BASE = 5;
+const GAME_SPEED_BASE = 4; // reduced from 5 (20% easier)
 const PARTICLE_COUNT = 20;
-const REVIVE_FRAMES = 180; // 3 seconds at 60fps
+const REVIVE_FRAMES = 60; // 1 second at 60fps
 
 // 8-bit chiptune sound generator
 const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
@@ -126,8 +126,10 @@ function createPlayer(x, id) {
 
 export default function LavaDash() {
   const canvasRef = useRef(null);
+  const [playerMode, setPlayerMode] = useState(null); // null = choosing, 1 or 2
   const gameRef = useRef({
     state: "menu", // menu, playing, dead
+    playerMode: 2,
     p1: createPlayer(100, 1),
     p2: createPlayer(170, 2),
     obstacles: [],
@@ -157,12 +159,21 @@ export default function LavaDash() {
   const [displayScore, setDisplayScore] = useState(0);
   const [displayHigh, setDisplayHigh] = useState(0);
 
+  const selectMode = useCallback((mode) => {
+    setPlayerMode(mode);
+    gameRef.current.playerMode = mode;
+  }, []);
+
   const startGame = useCallback(() => {
     const g = gameRef.current;
     if (g.state === "menu") {
       g.state = "playing";
-      g.p1 = createPlayer(100, 1);
+      g.p1 = createPlayer(g.playerMode === 1 ? 140 : 100, 1);
       g.p2 = createPlayer(170, 2);
+      if (g.playerMode === 1) {
+        g.p2.alive = false;
+        g.p2.ghostTimer = Infinity; // never revive in 1P
+      }
       g.obstacles = [];
       g.particles = [];
       g.score = 0;
@@ -219,17 +230,31 @@ export default function LavaDash() {
 
   useEffect(() => {
     const handleKey = (e) => {
+      const g = gameRef.current;
+      const is1P = g.playerMode === 1;
+
       if (e.code === "ShiftLeft") {
         e.preventDefault();
-        jumpPlayer(1);
+        if (is1P) {
+          if (g.state === "menu" || g.state === "dead") startGame();
+          else jumpPlayer(1);
+        } else {
+          jumpPlayer(1);
+        }
       } else if (e.code === "ShiftRight") {
         e.preventDefault();
-        jumpPlayer(2);
+        if (is1P) {
+          if (g.state === "menu" || g.state === "dead") startGame();
+          else jumpPlayer(1);
+        } else {
+          jumpPlayer(2);
+        }
       } else if (e.code === "Space") {
         e.preventDefault();
-        const g = gameRef.current;
         if (g.state === "menu" || g.state === "dead") {
           startGame();
+        } else if (is1P) {
+          jumpPlayer(1);
         } else {
           jumpBoth();
         }
@@ -643,17 +668,17 @@ export default function LavaDash() {
         g.score = Math.floor(g.distance / 10);
         setDisplayScore(g.score);
 
-        // Physics for both players
+        // Physics
         updatePlayer(g.p1);
-        updatePlayer(g.p2);
+        if (g.playerMode === 2) updatePlayer(g.p2);
 
         // Generate obstacles
         g.nextObstacle -= g.gameSpeed;
         if (g.nextObstacle <= 0) {
           const newObs = generateObstacle(GAME_WIDTH + 50, g.level);
           g.obstacles.push(...newObs);
-          g.nextObstacle = 220 + Math.random() * 160 - g.level * 8;
-          if (g.nextObstacle < 140) g.nextObstacle = 140;
+          g.nextObstacle = 270 + Math.random() * 190 - g.level * 6; // wider spacing (20% easier)
+          if (g.nextObstacle < 170) g.nextObstacle = 170;
         }
 
         // Move obstacles
@@ -665,9 +690,8 @@ export default function LavaDash() {
         // Collision for P1
         if (g.p1.alive && checkCollision(g.p1, g.obstacles)) {
           killPlayer(g, g.p1);
-          // Check if both are dead
-          if (!g.p2.alive) {
-            // Both dead = game over
+          // 1P mode: instant game over. 2P mode: game over if both dead
+          if (g.playerMode === 1 || !g.p2.alive) {
             g.state = "dead";
             if (g.score > g.highScore) g.highScore = g.score;
             setDisplayHigh(g.highScore);
@@ -675,12 +699,10 @@ export default function LavaDash() {
           }
         }
 
-        // Collision for P2
-        if (g.p2.alive && checkCollision(g.p2, g.obstacles)) {
+        // Collision for P2 (only in 2P mode)
+        if (g.playerMode === 2 && g.p2.alive && checkCollision(g.p2, g.obstacles)) {
           killPlayer(g, g.p2);
-          // Check if both are dead
           if (!g.p1.alive) {
-            // Both dead = game over
             g.state = "dead";
             if (g.score > g.highScore) g.highScore = g.score;
             setDisplayHigh(g.highScore);
@@ -688,17 +710,19 @@ export default function LavaDash() {
           }
         }
 
-        // Ghost/revive timers
-        if (!g.p1.alive && g.state === "playing") {
-          g.p1.ghostTimer++;
-          if (g.p1.ghostTimer >= REVIVE_FRAMES) {
-            revivePlayer(g, g.p1, g.p2);
+        // Ghost/revive timers (2P only)
+        if (g.playerMode === 2) {
+          if (!g.p1.alive && g.state === "playing") {
+            g.p1.ghostTimer++;
+            if (g.p1.ghostTimer >= REVIVE_FRAMES) {
+              revivePlayer(g, g.p1, g.p2);
+            }
           }
-        }
-        if (!g.p2.alive && g.state === "playing") {
-          g.p2.ghostTimer++;
-          if (g.p2.ghostTimer >= REVIVE_FRAMES) {
-            revivePlayer(g, g.p2, g.p1);
+          if (!g.p2.alive && g.state === "playing") {
+            g.p2.ghostTimer++;
+            if (g.p2.ghostTimer >= REVIVE_FRAMES) {
+              revivePlayer(g, g.p2, g.p1);
+            }
           }
         }
       }
@@ -727,20 +751,23 @@ export default function LavaDash() {
         // Draw alive players solid, dead as ghosts
         if (g.p1.alive) {
           drawCube(ctx, g.p1, false, g.frameCount);
-        } else {
+        } else if (g.playerMode === 2) {
           drawCube(ctx, g.p1, true, g.frameCount);
           drawGhostCountdown(ctx, g.p1, g.frameCount);
         }
-        if (g.p2.alive) {
-          drawCube(ctx, g.p2, false, g.frameCount);
-        } else {
-          drawCube(ctx, g.p2, true, g.frameCount);
-          drawGhostCountdown(ctx, g.p2, g.frameCount);
+        if (g.playerMode === 2) {
+          if (g.p2.alive) {
+            drawCube(ctx, g.p2, false, g.frameCount);
+          } else {
+            drawCube(ctx, g.p2, true, g.frameCount);
+            drawGhostCountdown(ctx, g.p2, g.frameCount);
+          }
         }
       } else if (g.state === "menu") {
-        // Draw both cubes on ground in menu (idle)
         drawCube(ctx, g.p1, false, g.frameCount);
-        drawCube(ctx, g.p2, false, g.frameCount);
+        if (g.playerMode === 2) {
+          drawCube(ctx, g.p2, false, g.frameCount);
+        }
       }
 
       // Ambient lava particles
@@ -784,25 +811,60 @@ export default function LavaDash() {
         ctx.fillText("\u{1F30B} LAVA DASH", GAME_WIDTH / 2, 120);
         ctx.shadowBlur = 0;
 
-        // Co-op subtitle
+        // Subtitle adapts to mode
         ctx.font = "bold 16px 'Courier New', monospace";
         ctx.fillStyle = "#ff9966";
-        ctx.fillText("2-PLAYER CO-OP", GAME_WIDTH / 2, 148);
+        ctx.fillText(g.playerMode === 1 ? "1-PLAYER MODE" : "2-PLAYER CO-OP", GAME_WIDTH / 2, 148);
 
         // Draw menu cubes
-        drawMenuCubes(ctx, g.frameCount);
+        if (g.playerMode === 2) {
+          drawMenuCubes(ctx, g.frameCount);
+        } else {
+          // Draw single P1 cube centered
+          const p1x = GAME_WIDTH / 2 - CUBE_SIZE / 2;
+          const p1y = 175 + Math.sin(g.frameCount * 0.04) * 5;
+          ctx.save();
+          ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
+          ctx.rotate(Math.sin(g.frameCount * 0.02) * 0.15);
+          ctx.shadowColor = "#ff8800";
+          ctx.shadowBlur = 15;
+          const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+          g1.addColorStop(0, "#ffaa00");
+          g1.addColorStop(1, "#ff6600");
+          ctx.fillStyle = g1;
+          ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+          ctx.strokeStyle = "#ffcc44";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(4, -10, 12, 12);
+          ctx.fillStyle = "#111";
+          ctx.fillRect(9, -7, 6, 6);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(11, -6, 2, 2);
+          ctx.restore();
+        }
 
         ctx.font = "bold 16px 'Courier New', monospace";
         ctx.textAlign = "center";
         const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.4;
         ctx.globalAlpha = pulse;
         ctx.fillStyle = "#ffaa44";
-        ctx.fillText("LEFT SHIFT (P1) / RIGHT SHIFT (P2) TO START", GAME_WIDTH / 2, 245);
+        if (g.playerMode === 1) {
+          ctx.fillText("PRESS SPACE OR CLICK TO START", GAME_WIDTH / 2, 245);
+        } else {
+          ctx.fillText("LEFT SHIFT (P1) / RIGHT SHIFT (P2) TO START", GAME_WIDTH / 2, 245);
+        }
         ctx.globalAlpha = 1;
 
         ctx.font = "14px 'Courier New', monospace";
         ctx.fillStyle = "#cc8844";
-        ctx.fillText("Jump over obstacles together! Revive your partner!", GAME_WIDTH / 2, 280);
+        if (g.playerMode === 1) {
+          ctx.fillText("Jump over obstacles and survive!", GAME_WIDTH / 2, 280);
+        } else {
+          ctx.fillText("Jump over obstacles together! Revive your partner!", GAME_WIDTH / 2, 280);
+        }
 
         if (g.highScore > 0) {
           ctx.font = "bold 16px 'Courier New', monospace";
@@ -865,8 +927,10 @@ export default function LavaDash() {
         ctx.fillText(`LVL ${g.level}`, 20, 62);
         ctx.restore();
 
-        // Player status indicators
-        drawPlayerStatus(ctx, g);
+        // Player status indicators (2P only)
+        if (g.playerMode === 2) {
+          drawPlayerStatus(ctx, g);
+        }
       }
 
       ctx.restore();
@@ -875,7 +939,123 @@ export default function LavaDash() {
 
     animRef.current = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [playerMode]);
+
+  // Mode selection screen
+  if (playerMode === null) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0a0005",
+          fontFamily: "'Courier New', monospace",
+          userSelect: "none",
+        }}
+      >
+        <div
+          style={{
+            color: "#ff6600",
+            fontSize: 48,
+            fontWeight: "bold",
+            marginBottom: 8,
+            textShadow: "0 0 30px rgba(255,68,0,0.6)",
+          }}
+        >
+          {"\u{1F30B}"} LAVA DASH
+        </div>
+        <div
+          style={{
+            color: "#ff9966",
+            fontSize: 14,
+            marginBottom: 40,
+            letterSpacing: 3,
+            textTransform: "uppercase",
+          }}
+        >
+          Built by Father & Son
+        </div>
+        <div
+          style={{
+            color: "#ffcc88",
+            fontSize: 20,
+            fontWeight: "bold",
+            marginBottom: 24,
+            letterSpacing: 2,
+          }}
+        >
+          SELECT MODE
+        </div>
+        <div style={{ display: "flex", gap: 24 }}>
+          <button
+            onClick={() => selectMode(1)}
+            style={{
+              background: "linear-gradient(180deg, #ff8800, #cc4400)",
+              border: "2px solid #ffaa44",
+              borderRadius: 12,
+              color: "#fff",
+              fontFamily: "'Courier New', monospace",
+              fontSize: 18,
+              fontWeight: "bold",
+              padding: "20px 36px",
+              cursor: "pointer",
+              boxShadow: "0 0 20px rgba(255,136,0,0.4)",
+              transition: "transform 0.1s, box-shadow 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "scale(1.05)";
+              e.target.style.boxShadow = "0 0 30px rgba(255,136,0,0.7)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "scale(1)";
+              e.target.style.boxShadow = "0 0 20px rgba(255,136,0,0.4)";
+            }}
+          >
+            {"\u{1F3AE}"} 1 PLAYER
+          </button>
+          <button
+            onClick={() => selectMode(2)}
+            style={{
+              background: "linear-gradient(180deg, #0088ff, #0044cc)",
+              border: "2px solid #66bbff",
+              borderRadius: 12,
+              color: "#fff",
+              fontFamily: "'Courier New', monospace",
+              fontSize: 18,
+              fontWeight: "bold",
+              padding: "20px 36px",
+              cursor: "pointer",
+              boxShadow: "0 0 20px rgba(0,136,255,0.4)",
+              transition: "transform 0.1s, box-shadow 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "scale(1.05)";
+              e.target.style.boxShadow = "0 0 30px rgba(0,136,255,0.7)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "scale(1)";
+              e.target.style.boxShadow = "0 0 20px rgba(0,136,255,0.4)";
+            }}
+          >
+            {"\u{1F91D}"} 2 PLAYERS
+          </button>
+        </div>
+        <div
+          style={{
+            color: "#664422",
+            fontSize: 12,
+            marginTop: 32,
+            letterSpacing: 1,
+          }}
+        >
+          2-Player mode: team up & revive each other!
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -906,10 +1086,10 @@ export default function LavaDash() {
         ref={canvasRef}
         width={GAME_WIDTH}
         height={GAME_HEIGHT}
-        onClick={jumpBoth}
+        onClick={() => gameRef.current.playerMode === 1 ? jumpPlayer(1) : jumpBoth()}
         onTouchStart={(e) => {
           e.preventDefault();
-          jumpBoth();
+          gameRef.current.playerMode === 1 ? jumpPlayer(1) : jumpBoth();
         }}
         style={{
           border: "2px solid #ff440055",
@@ -927,7 +1107,9 @@ export default function LavaDash() {
           letterSpacing: 1,
         }}
       >
-        LEFT SHIFT = P1 JUMP | RIGHT SHIFT = P2 JUMP
+        {playerMode === 1
+          ? "SPACE / SHIFT / CLICK = JUMP"
+          : "LEFT SHIFT = P1 JUMP | RIGHT SHIFT = P2 JUMP"}
       </div>
     </div>
   );
