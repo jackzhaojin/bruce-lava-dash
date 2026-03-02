@@ -10,6 +10,32 @@ const GAME_SPEED_BASE = 4; // reduced from 5 (20% easier)
 const PARTICLE_COUNT = 20;
 const REVIVE_FRAMES = 60; // 1 second at 60fps
 
+const COLOR_PRESETS = [
+  { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
+  { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },
+  { name: "Green",  gradStart: "#44ff66", gradEnd: "#00aa22", glow: "#22dd44", border: "#88ff99" },
+  { name: "Purple", gradStart: "#cc66ff", gradEnd: "#7722cc", glow: "#aa44ff", border: "#dd99ff" },
+  { name: "Pink",   gradStart: "#ff66aa", gradEnd: "#cc2266", glow: "#ff4488", border: "#ff99cc" },
+  { name: "Red",    gradStart: "#ff4444", gradEnd: "#cc0000", glow: "#ff2222", border: "#ff8888" },
+];
+
+// Pad types (ground-level boost plates)
+const PAD_TYPES = {
+  yellow: { vy: -14, color: "#ffdd00", glow: "rgba(255,221,0,0.6)" },
+  pink:   { vy: -8,  color: "#ff66aa", glow: "rgba(255,102,170,0.6)" },
+  blue:   { vy: -18, color: "#00aaff", glow: "rgba(0,170,255,0.6)" },
+};
+
+// Orb types (floating boost rings)
+const ORB_TYPES = {
+  yellow: { vy: -12, color: "#ffdd00", glow: "rgba(255,221,0,0.6)" },
+  pink:   { vy: -7,  color: "#ff66aa", glow: "rgba(255,102,170,0.6)" },
+  blue:   { vy: -16, color: "#00aaff", glow: "rgba(0,170,255,0.6)" },
+  green:  { vy: -10, color: "#44ff66", glow: "rgba(68,255,102,0.6)" },
+  black:  { vy: 8,   color: "#333333", glow: "rgba(100,100,100,0.6)" },
+  red:    { vy: -18, color: "#ff3333", glow: "rgba(255,51,51,0.6)" },
+};
+
 // 8-bit chiptune sound generator
 const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
 
@@ -64,6 +90,15 @@ function playSound(type) {
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
       osc.start();
       osc.stop(ctx.currentTime + 0.35);
+    } else if (type === "boost") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(400, ctx.currentTime);
+      osc.frequency.setValueAtTime(600, ctx.currentTime + 0.05);
+      osc.frequency.setValueAtTime(800, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.13, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.18);
     }
   } catch (e) {}
 }
@@ -92,6 +127,39 @@ function generateObstacle(x, level) {
       { type: "spike", x, y: GROUND_Y, w: 30, h: 40 },
       { type: "spike", x: x + 40, y: GROUND_Y, w: 30, h: 40 },
       { type: "spike", x: x + 80, y: GROUND_Y, w: 30, h: 40 },
+    ],
+    // Yellow pad before spike gap (pad launches you over)
+    [
+      { type: "pad", subtype: "yellow", x, y: GROUND_Y, w: 40, h: 10, activated: false },
+      { type: "spike", x: x + 80, y: GROUND_Y, w: 30, h: 40 },
+      { type: "spike", x: x + 120, y: GROUND_Y, w: 30, h: 40 },
+    ],
+    // Floating yellow orb (standalone boost)
+    [
+      { type: "orb", subtype: "yellow", x: x + 20, y: GROUND_Y - 100, w: 28, h: 28, activated: false },
+    ],
+    // Pink pad + tall block combo
+    [
+      { type: "pad", subtype: "pink", x, y: GROUND_Y, w: 40, h: 10, activated: false },
+      { type: "block", x: x + 70, y: GROUND_Y - 36, w: 36, h: 36 },
+    ],
+    // Black orb trap above spikes
+    [
+      { type: "orb", subtype: "black", x: x + 30, y: GROUND_Y - 120, w: 28, h: 28, activated: false },
+      { type: "spike", x: x + 60, y: GROUND_Y, w: 30, h: 40 },
+    ],
+    // Blue pad + triple spike
+    [
+      { type: "pad", subtype: "blue", x, y: GROUND_Y, w: 40, h: 10, activated: false },
+      { type: "spike", x: x + 80, y: GROUND_Y, w: 30, h: 40 },
+      { type: "spike", x: x + 120, y: GROUND_Y, w: 30, h: 40 },
+      { type: "spike", x: x + 160, y: GROUND_Y, w: 30, h: 40 },
+    ],
+    // Orb chain at different heights
+    [
+      { type: "orb", subtype: "green", x, y: GROUND_Y - 90, w: 28, h: 28, activated: false },
+      { type: "orb", subtype: "yellow", x: x + 80, y: GROUND_Y - 130, w: 28, h: 28, activated: false },
+      { type: "orb", subtype: "pink", x: x + 160, y: GROUND_Y - 80, w: 28, h: 28, activated: false },
     ],
   ];
   const maxIdx = Math.min(patterns.length, 2 + Math.floor(level / 3));
@@ -127,6 +195,10 @@ function createPlayer(x, id) {
 export default function LavaDash() {
   const canvasRef = useRef(null);
   const [playerMode, setPlayerMode] = useState(null); // null = choosing, 1 or 2
+  const [p1Color, setP1Color] = useState(0); // index into COLOR_PRESETS
+  const [p2Color, setP2Color] = useState(1);
+  const keysHeld = useRef({ shiftLeft: false, shiftRight: false, space: false });
+  const mouseHeld = useRef(false);
   const gameRef = useRef({
     state: "menu", // menu, playing, dead
     playerMode: 2,
@@ -162,7 +234,9 @@ export default function LavaDash() {
   const selectMode = useCallback((mode) => {
     setPlayerMode(mode);
     gameRef.current.playerMode = mode;
-  }, []);
+    gameRef.current.p1Color = COLOR_PRESETS[p1Color];
+    gameRef.current.p2Color = COLOR_PRESETS[p2Color];
+  }, [p1Color, p2Color]);
 
   const startGame = useCallback(() => {
     const g = gameRef.current;
@@ -198,7 +272,7 @@ export default function LavaDash() {
     }
     if (g.state === "playing") {
       const player = playerNum === 1 ? g.p1 : g.p2;
-      if (player.alive && player.grounded) {
+      if (player.grounded) {
         player.vy = JUMP_FORCE;
         player.grounded = false;
         playSound("jump");
@@ -214,12 +288,12 @@ export default function LavaDash() {
     }
     if (g.state === "playing") {
       let jumped = false;
-      if (g.p1.alive && g.p1.grounded) {
+      if (g.p1.grounded) {
         g.p1.vy = JUMP_FORCE;
         g.p1.grounded = false;
         jumped = true;
       }
-      if (g.p2.alive && g.p2.grounded) {
+      if (g.p2.grounded) {
         g.p2.vy = JUMP_FORCE;
         g.p2.grounded = false;
         jumped = true;
@@ -229,45 +303,49 @@ export default function LavaDash() {
   }, [startGame]);
 
   useEffect(() => {
-    const handleKey = (e) => {
+    const handleKeyDown = (e) => {
       const g = gameRef.current;
-      const is1P = g.playerMode === 1;
-
       if (e.code === "ShiftLeft") {
         e.preventDefault();
-        if (is1P) {
+        if (!keysHeld.current.shiftLeft) {
+          keysHeld.current.shiftLeft = true;
           if (g.state === "menu" || g.state === "dead") startGame();
-          else jumpPlayer(1);
-        } else {
-          jumpPlayer(1);
         }
       } else if (e.code === "ShiftRight") {
         e.preventDefault();
-        if (is1P) {
+        if (!keysHeld.current.shiftRight) {
+          keysHeld.current.shiftRight = true;
           if (g.state === "menu" || g.state === "dead") startGame();
-          else jumpPlayer(1);
-        } else {
-          jumpPlayer(2);
         }
       } else if (e.code === "Space") {
         e.preventDefault();
-        if (g.state === "menu" || g.state === "dead") {
-          startGame();
-        } else if (is1P) {
-          jumpPlayer(1);
-        } else {
-          jumpBoth();
+        if (!keysHeld.current.space) {
+          keysHeld.current.space = true;
+          if (g.state === "menu" || g.state === "dead") startGame();
         }
       }
     };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [jumpPlayer, jumpBoth, startGame]);
+    const handleKeyUp = (e) => {
+      if (e.code === "ShiftLeft") keysHeld.current.shiftLeft = false;
+      else if (e.code === "ShiftRight") keysHeld.current.shiftRight = false;
+      else if (e.code === "Space") keysHeld.current.space = false;
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [startGame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
+
+    // Sync chosen colors into gameRef for the render loop
+    gameRef.current.p1Color = COLOR_PRESETS[p1Color];
+    gameRef.current.p2Color = COLOR_PRESETS[p2Color];
 
     function drawVolcano(ctx, x, w, h) {
       const baseY = GROUND_Y + 30;
@@ -303,62 +381,135 @@ export default function LavaDash() {
       ctx.lineTo(x + w, y);
       ctx.closePath();
       const grad = ctx.createLinearGradient(x, y, x + w / 2, y - h);
-      grad.addColorStop(0, "#cc2200");
-      grad.addColorStop(1, "#ff6600");
+      grad.addColorStop(0, "#dddddd");
+      grad.addColorStop(1, "#ffffff");
       ctx.fillStyle = grad;
       ctx.fill();
-      ctx.strokeStyle = "#ff8800";
+      ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
       // Glow
-      ctx.shadowColor = "#ff4400";
+      ctx.shadowColor = "#aaccff";
       ctx.shadowBlur = 8;
       ctx.fill();
       ctx.shadowBlur = 0;
     }
 
     function drawBlock(ctx, x, y, w, h) {
-      ctx.fillStyle = "#661100";
+      ctx.fillStyle = "#334455";
       ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = "#ff4400";
+      ctx.strokeStyle = "#88bbee";
       ctx.lineWidth = 2;
       ctx.strokeRect(x, y, w, h);
 
       // Inner pattern
-      ctx.strokeStyle = "rgba(255,100,0,0.3)";
+      ctx.strokeStyle = "rgba(150,200,255,0.3)";
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
 
       // Glow
-      ctx.shadowColor = "#ff2200";
+      ctx.shadowColor = "#6699cc";
       ctx.shadowBlur = 6;
-      ctx.strokeStyle = "#ff4400";
+      ctx.strokeStyle = "#88bbee";
       ctx.strokeRect(x, y, w, h);
       ctx.shadowBlur = 0;
     }
 
+    function drawPad(ctx, o, frameCount) {
+      const cfg = PAD_TYPES[o.subtype] || PAD_TYPES.yellow;
+      ctx.save();
+      if (o.activated) ctx.globalAlpha = 0.3;
+
+      // Glow
+      ctx.shadowColor = cfg.glow;
+      ctx.shadowBlur = 10;
+
+      // Pad body
+      ctx.fillStyle = cfg.color;
+      ctx.fillRect(o.x, o.y - o.h, o.w, o.h);
+
+      // Brighter top edge
+      ctx.fillStyle = "#fff";
+      ctx.globalAlpha = o.activated ? 0.1 : 0.4;
+      ctx.fillRect(o.x, o.y - o.h, o.w, 2);
+
+      // Up-arrow indicator
+      if (!o.activated) {
+        ctx.globalAlpha = 0.7 + Math.sin(frameCount * 0.1) * 0.3;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        const cx = o.x + o.w / 2;
+        const cy = o.y - o.h / 2;
+        ctx.moveTo(cx, cy - 4);
+        ctx.lineTo(cx - 4, cy + 2);
+        ctx.lineTo(cx + 4, cy + 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function drawOrb(ctx, o, frameCount) {
+      const cfg = ORB_TYPES[o.subtype] || ORB_TYPES.yellow;
+      const cx = o.x + o.w / 2;
+      const cy = o.y + o.h / 2;
+      const r = o.w / 2;
+
+      ctx.save();
+      if (o.activated) ctx.globalAlpha = 0.25;
+
+      // Pulsing outer glow ring
+      if (!o.activated) {
+        const pulse = 1 + Math.sin(frameCount * 0.08) * 0.3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 4 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = cfg.color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = o.activated ? 0.1 : (0.4 + Math.sin(frameCount * 0.08) * 0.3);
+        ctx.stroke();
+        ctx.globalAlpha = o.activated ? 0.25 : 1;
+      }
+
+      // Radial gradient fill
+      const grad = ctx.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, r);
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.4, cfg.color);
+      grad.addColorStop(1, o.subtype === "black" ? "#111" : cfg.color);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.shadowColor = cfg.glow;
+      ctx.shadowBlur = 12;
+      ctx.fill();
+
+      // Inner highlight
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy - 3, r * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.shadowBlur = 0;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
     function drawCube(ctx, player, isGhost, frameCount) {
       const isP1 = player.id === 1;
-      // Color config
-      const gradStart = isP1 ? "#ffaa00" : "#00ccff";
-      const gradEnd = isP1 ? "#ff6600" : "#0066ff";
-      const glowColor = isP1 ? "#ff8800" : "#0088ff";
-      const borderColor = isP1 ? "#ffcc44" : "#66ddff";
+      const colorObj = isP1 ? gameRef.current.p1Color : gameRef.current.p2Color;
+      const gradStart = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
+      const gradEnd = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
+      const glowColor = colorObj ? colorObj.glow : (isP1 ? "#ff8800" : "#0088ff");
+      const borderColor = colorObj ? colorObj.border : (isP1 ? "#ffcc44" : "#66ddff");
 
       let drawX = player.x;
       let drawY = player.y;
 
-      if (isGhost) {
-        // Ghost bob effect
-        const bob = Math.sin(frameCount * 0.08) * 4;
-        drawY = player.y + bob;
-      }
-
       ctx.save();
 
       if (isGhost) {
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.35;
       }
 
       const cx = drawX + CUBE_SIZE / 2;
@@ -397,18 +548,59 @@ export default function LavaDash() {
     function drawGhostCountdown(ctx, player, frameCount) {
       if (!player.alive && player.ghostTimer < REVIVE_FRAMES) {
         const remaining = Math.ceil((REVIVE_FRAMES - player.ghostTimer) / 60);
-        const bob = Math.sin(frameCount * 0.08) * 4;
-        const drawY = player.y + bob;
+        const isP1 = player.id === 1;
+        const colorObj = isP1 ? gameRef.current.p1Color : gameRef.current.p2Color;
 
         ctx.save();
         ctx.font = "bold 22px 'Courier New', monospace";
         ctx.textAlign = "center";
-        ctx.fillStyle = player.id === 1 ? "#ffaa00" : "#00ccff";
-        ctx.shadowColor = player.id === 1 ? "#ff6600" : "#0066ff";
+        ctx.fillStyle = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
+        ctx.shadowColor = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
         ctx.shadowBlur = 10;
-        ctx.fillText(remaining.toString(), player.x + CUBE_SIZE / 2, drawY - 12);
+        ctx.fillText(remaining.toString(), player.x + CUBE_SIZE / 2, player.y - 12);
         ctx.shadowBlur = 0;
         ctx.restore();
+      }
+    }
+
+    function checkBoosts(player, obstacles, g) {
+      const cubeL = player.x + 4;
+      const cubeR = player.x + CUBE_SIZE - 4;
+      const cubeT = player.y + 4;
+      const cubeB = player.y + CUBE_SIZE - 2;
+
+      for (const o of obstacles) {
+        if ((o.type !== "pad" && o.type !== "orb") || o.activated) continue;
+
+        let oL, oR, oT, oB;
+        if (o.type === "pad") {
+          oL = o.x;
+          oR = o.x + o.w;
+          oT = o.y - o.h;
+          oB = o.y;
+        } else {
+          oL = o.x;
+          oR = o.x + o.w;
+          oT = o.y;
+          oB = o.y + o.h;
+        }
+
+        if (cubeR > oL && cubeL < oR && cubeB > oT && cubeT < oB) {
+          o.activated = true;
+          const cfg = o.type === "pad" ? PAD_TYPES[o.subtype] : ORB_TYPES[o.subtype];
+          if (cfg) {
+            player.vy = cfg.vy;
+            player.grounded = false;
+            playSound("boost");
+            // Spawn colored particles
+            const pColor = cfg.color;
+            g.particles.push(...createParticles(
+              player.x + CUBE_SIZE / 2,
+              player.y + CUBE_SIZE / 2,
+              [pColor, "#fff", pColor, "#ffcc00", pColor]
+            ));
+          }
+        }
       }
     }
 
@@ -436,7 +628,6 @@ export default function LavaDash() {
     }
 
     function updatePlayer(player) {
-      if (!player.alive) return;
       player.vy += GRAVITY;
       player.y += player.vy;
       if (player.y >= GROUND_Y - CUBE_SIZE) {
@@ -456,9 +647,13 @@ export default function LavaDash() {
       player.alive = false;
       player.ghostTimer = 0;
       g.screenShake = 12;
-      const colors = player.id === 1
-        ? ["#ff4500", "#ff6b35", "#ffa500", "#ffcc00", "#ff0000"]
-        : ["#0088ff", "#00bbff", "#00ccff", "#66ddff", "#0044cc"];
+      const isP1 = player.id === 1;
+      const colorObj = isP1 ? g.p1Color : g.p2Color;
+      const colors = colorObj
+        ? [colorObj.gradStart, colorObj.gradEnd, colorObj.glow, colorObj.border, colorObj.gradEnd]
+        : (isP1
+          ? ["#ff4500", "#ff6b35", "#ffa500", "#ffcc00", "#ff0000"]
+          : ["#0088ff", "#00bbff", "#00ccff", "#66ddff", "#0044cc"]);
       g.particles.push(...createParticles(player.x + CUBE_SIZE / 2, player.y + CUBE_SIZE / 2, colors));
       playSound("death");
     }
@@ -481,20 +676,23 @@ export default function LavaDash() {
     }
 
     function drawMenuCubes(ctx, frameCount) {
-      // Draw P1 orange cube
+      const c1 = gameRef.current.p1Color || COLOR_PRESETS[0];
+      const c2 = gameRef.current.p2Color || COLOR_PRESETS[1];
+
+      // Draw P1 cube
       const p1x = GAME_WIDTH / 2 - 55;
       const p1y = 175 + Math.sin(frameCount * 0.04) * 5;
       ctx.save();
       ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
       ctx.rotate(Math.sin(frameCount * 0.02) * 0.15);
-      ctx.shadowColor = "#ff8800";
+      ctx.shadowColor = c1.glow;
       ctx.shadowBlur = 15;
       const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-      g1.addColorStop(0, "#ffaa00");
-      g1.addColorStop(1, "#ff6600");
+      g1.addColorStop(0, c1.gradStart);
+      g1.addColorStop(1, c1.gradEnd);
       ctx.fillStyle = g1;
       ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
-      ctx.strokeStyle = "#ffcc44";
+      ctx.strokeStyle = c1.border;
       ctx.lineWidth = 2;
       ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
       ctx.shadowBlur = 0;
@@ -510,24 +708,24 @@ export default function LavaDash() {
       ctx.save();
       ctx.font = "bold 12px 'Courier New', monospace";
       ctx.textAlign = "center";
-      ctx.fillStyle = "#ffaa00";
+      ctx.fillStyle = c1.gradStart;
       ctx.fillText("P1", p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE + 16);
       ctx.restore();
 
-      // Draw P2 blue cube
+      // Draw P2 cube
       const p2x = GAME_WIDTH / 2 + 20;
       const p2y = 175 + Math.sin(frameCount * 0.04 + 1) * 5;
       ctx.save();
       ctx.translate(p2x + CUBE_SIZE / 2, p2y + CUBE_SIZE / 2);
       ctx.rotate(Math.sin(frameCount * 0.02 + 1) * 0.15);
-      ctx.shadowColor = "#0088ff";
+      ctx.shadowColor = c2.glow;
       ctx.shadowBlur = 15;
       const g2 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-      g2.addColorStop(0, "#00ccff");
-      g2.addColorStop(1, "#0066ff");
+      g2.addColorStop(0, c2.gradStart);
+      g2.addColorStop(1, c2.gradEnd);
       ctx.fillStyle = g2;
       ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
-      ctx.strokeStyle = "#66ddff";
+      ctx.strokeStyle = c2.border;
       ctx.lineWidth = 2;
       ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
       ctx.shadowBlur = 0;
@@ -543,13 +741,14 @@ export default function LavaDash() {
       ctx.save();
       ctx.font = "bold 12px 'Courier New', monospace";
       ctx.textAlign = "center";
-      ctx.fillStyle = "#00ccff";
+      ctx.fillStyle = c2.gradStart;
       ctx.fillText("P2", p2x + CUBE_SIZE / 2, p2y + CUBE_SIZE + 16);
       ctx.restore();
     }
 
     function drawPlayerStatus(ctx, g) {
-      // P1 status
+      const c1 = g.p1Color || COLOR_PRESETS[0];
+      const c2 = g.p2Color || COLOR_PRESETS[1];
       ctx.save();
       const statusY = 10;
       const statusH = 22;
@@ -559,13 +758,13 @@ export default function LavaDash() {
       ctx.fillRect(GAME_WIDTH - 200, statusY, 90, statusH);
       ctx.font = "bold 12px 'Courier New', monospace";
       ctx.textAlign = "left";
-      ctx.fillStyle = g.p1.alive ? "#ffaa00" : "#884400";
+      ctx.fillStyle = g.p1.alive ? c1.gradStart : c1.gradEnd;
       ctx.fillText(g.p1.alive ? "P1: ALIVE" : "P1: DEAD", GAME_WIDTH - 195, statusY + 15);
 
       // P2
       ctx.fillStyle = "rgba(0,0,0,0.4)";
       ctx.fillRect(GAME_WIDTH - 105, statusY, 90, statusH);
-      ctx.fillStyle = g.p2.alive ? "#00ccff" : "#004488";
+      ctx.fillStyle = g.p2.alive ? c2.gradStart : c2.gradEnd;
       ctx.fillText(g.p2.alive ? "P2: ALIVE" : "P2: DEAD", GAME_WIDTH - 100, statusY + 15);
 
       ctx.restore();
@@ -672,6 +871,43 @@ export default function LavaDash() {
         updatePlayer(g.p1);
         if (g.playerMode === 2) updatePlayer(g.p2);
 
+        // Hold-to-jump: auto-jump when key is held and player is grounded
+        const is1P = g.playerMode === 1;
+        const held = keysHeld.current;
+        const mHeld = mouseHeld.current;
+        if (is1P) {
+          if ((held.shiftLeft || held.shiftRight || held.space || mHeld) && g.p1.grounded && g.p1.alive) {
+            g.p1.vy = JUMP_FORCE;
+            g.p1.grounded = false;
+            playSound("jump");
+          }
+        } else {
+          let jumped = false;
+          if ((held.shiftLeft) && g.p1.grounded && g.p1.alive) {
+            g.p1.vy = JUMP_FORCE;
+            g.p1.grounded = false;
+            jumped = true;
+          }
+          if ((held.shiftRight) && g.p2.grounded && g.p2.alive) {
+            g.p2.vy = JUMP_FORCE;
+            g.p2.grounded = false;
+            jumped = true;
+          }
+          if (held.space || mHeld) {
+            if (g.p1.grounded && g.p1.alive) {
+              g.p1.vy = JUMP_FORCE;
+              g.p1.grounded = false;
+              jumped = true;
+            }
+            if (g.p2.grounded && g.p2.alive) {
+              g.p2.vy = JUMP_FORCE;
+              g.p2.grounded = false;
+              jumped = true;
+            }
+          }
+          if (jumped) playSound("jump");
+        }
+
         // Generate obstacles
         g.nextObstacle -= g.gameSpeed;
         if (g.nextObstacle <= 0) {
@@ -686,6 +922,10 @@ export default function LavaDash() {
           o.x -= g.gameSpeed;
         });
         g.obstacles = g.obstacles.filter((o) => o.x > -60);
+
+        // Boost collision (pads/orbs) - before kill checks
+        if (g.p1.alive) checkBoosts(g.p1, g.obstacles, g);
+        if (g.playerMode === 2 && g.p2.alive) checkBoosts(g.p2, g.obstacles, g);
 
         // Collision for P1
         if (g.p1.alive && checkCollision(g.p1, g.obstacles)) {
@@ -731,6 +971,8 @@ export default function LavaDash() {
       g.obstacles.forEach((o) => {
         if (o.type === "spike") drawSpike(ctx, o.x, o.y, o.w, o.h);
         else if (o.type === "block") drawBlock(ctx, o.x, o.y, o.w, o.h);
+        else if (o.type === "pad") drawPad(ctx, o, g.frameCount);
+        else if (o.type === "orb") drawOrb(ctx, o, g.frameCount);
       });
 
       // Draw particles
@@ -820,20 +1062,21 @@ export default function LavaDash() {
         if (g.playerMode === 2) {
           drawMenuCubes(ctx, g.frameCount);
         } else {
-          // Draw single P1 cube centered
+          // Draw single cube centered with chosen P1 color
+          const c1 = g.p1Color || COLOR_PRESETS[0];
           const p1x = GAME_WIDTH / 2 - CUBE_SIZE / 2;
           const p1y = 175 + Math.sin(g.frameCount * 0.04) * 5;
           ctx.save();
           ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
           ctx.rotate(Math.sin(g.frameCount * 0.02) * 0.15);
-          ctx.shadowColor = "#ff8800";
+          ctx.shadowColor = c1.glow;
           ctx.shadowBlur = 15;
           const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-          g1.addColorStop(0, "#ffaa00");
-          g1.addColorStop(1, "#ff6600");
+          g1.addColorStop(0, c1.gradStart);
+          g1.addColorStop(1, c1.gradEnd);
           ctx.fillStyle = g1;
           ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
-          ctx.strokeStyle = "#ffcc44";
+          ctx.strokeStyle = c1.border;
           ctx.lineWidth = 2;
           ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
           ctx.shadowBlur = 0;
@@ -914,17 +1157,22 @@ export default function LavaDash() {
         ctx.font = "bold 20px 'Courier New', monospace";
         ctx.textAlign = "left";
         ctx.fillStyle = "rgba(0,0,0,0.4)";
-        ctx.fillRect(10, 10, 160, 36);
+        ctx.fillRect(10, 10, 160, 52);
         ctx.fillStyle = "#ffcc00";
         ctx.shadowColor = "#ff8800";
         ctx.shadowBlur = 6;
         ctx.fillText(`SCORE: ${g.score}`, 20, 35);
         ctx.shadowBlur = 0;
 
+        // High score
+        ctx.font = "bold 12px 'Courier New', monospace";
+        ctx.fillStyle = "#cc8844";
+        ctx.fillText(`BEST: ${g.highScore}`, 20, 52);
+
         // Level indicator
         ctx.font = "bold 14px 'Courier New', monospace";
         ctx.fillStyle = "#ff6644";
-        ctx.fillText(`LVL ${g.level}`, 20, 62);
+        ctx.fillText(`LVL ${g.level}`, 120, 52);
         ctx.restore();
 
         // Player status indicators (2P only)
@@ -989,6 +1237,60 @@ export default function LavaDash() {
         >
           SELECT MODE
         </div>
+        {/* Color Picker */}
+        <div style={{ marginBottom: 20, textAlign: "center" }}>
+          <div style={{ color: "#cc8844", fontSize: 13, marginBottom: 8, letterSpacing: 1 }}>
+            P1 COLOR
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            {COLOR_PRESETS.map((c, i) => (
+              <div
+                key={`p1-${i}`}
+                onClick={() => {
+                  if (i !== p2Color) setP1Color(i);
+                }}
+                title={c.name}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 6,
+                  background: `linear-gradient(135deg, ${c.gradStart}, ${c.gradEnd})`,
+                  border: p1Color === i ? "3px solid #fff" : "2px solid rgba(255,255,255,0.2)",
+                  cursor: i === p2Color ? "not-allowed" : "pointer",
+                  opacity: i === p2Color ? 0.3 : 1,
+                  boxShadow: p1Color === i ? `0 0 12px ${c.glow}` : "none",
+                  transition: "transform 0.1s, box-shadow 0.1s",
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ color: "#cc8844", fontSize: 13, marginTop: 12, marginBottom: 8, letterSpacing: 1 }}>
+            P2 COLOR
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            {COLOR_PRESETS.map((c, i) => (
+              <div
+                key={`p2-${i}`}
+                onClick={() => {
+                  if (i !== p1Color) setP2Color(i);
+                }}
+                title={c.name}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 6,
+                  background: `linear-gradient(135deg, ${c.gradStart}, ${c.gradEnd})`,
+                  border: p2Color === i ? "3px solid #fff" : "2px solid rgba(255,255,255,0.2)",
+                  cursor: i === p1Color ? "not-allowed" : "pointer",
+                  opacity: i === p1Color ? 0.3 : 1,
+                  boxShadow: p2Color === i ? `0 0 12px ${c.glow}` : "none",
+                  transition: "transform 0.1s, box-shadow 0.1s",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 24 }}>
           <button
             onClick={() => selectMode(1)}
@@ -1086,10 +1388,22 @@ export default function LavaDash() {
         ref={canvasRef}
         width={GAME_WIDTH}
         height={GAME_HEIGHT}
-        onClick={() => gameRef.current.playerMode === 1 ? jumpPlayer(1) : jumpBoth()}
+        onMouseDown={() => {
+          const g = gameRef.current;
+          mouseHeld.current = true;
+          if (g.state === "menu" || g.state === "dead") startGame();
+        }}
+        onMouseUp={() => { mouseHeld.current = false; }}
+        onMouseLeave={() => { mouseHeld.current = false; }}
         onTouchStart={(e) => {
           e.preventDefault();
-          gameRef.current.playerMode === 1 ? jumpPlayer(1) : jumpBoth();
+          const g = gameRef.current;
+          mouseHeld.current = true;
+          if (g.state === "menu" || g.state === "dead") startGame();
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          mouseHeld.current = false;
         }}
         style={{
           border: "2px solid #ff440055",
