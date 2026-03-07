@@ -9,6 +9,7 @@ const JUMP_FORCE = -12;
 const GAME_SPEED_BASE = 4; // reduced from 5 (20% easier)
 const PARTICLE_COUNT = 20;
 const REVIVE_FRAMES = 60; // 1 second at 60fps
+const DEAD_COOLDOWN = 180; // 3 seconds at 60fps before input is accepted after game over
 
 const COLOR_PRESETS = [
   { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
@@ -216,6 +217,7 @@ export default function LavaDash() {
     gameSpeed: GAME_SPEED_BASE,
     level: 1,
     beatTimer: 0,
+    deadTimer: 0,
     screenShake: 0,
     groundOffset: 0,
     frameCount: 0,
@@ -259,6 +261,7 @@ export default function LavaDash() {
       setDisplayState("playing");
       setDisplayScore(0);
     } else if (g.state === "dead") {
+      if (g.deadTimer < DEAD_COOLDOWN) return; // ignore input during cooldown
       g.state = "menu";
       setDisplayState("menu");
     }
@@ -619,7 +622,10 @@ export default function LavaDash() {
             return true;
           }
         } else if (o.type === "block") {
-          if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
+          // Standing on top is safe; only kill on side hits
+          const playerBottom = player.y + CUBE_SIZE;
+          const onTop = playerBottom <= o.y + 10;
+          if (!onTop && cubeR > o.x + 3 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
             return true;
           }
         }
@@ -627,9 +633,28 @@ export default function LavaDash() {
       return false;
     }
 
-    function updatePlayer(player) {
+    function updatePlayer(player, obstacles) {
       player.vy += GRAVITY;
       player.y += player.vy;
+
+      // Land on block tops (platforms)
+      if (player.alive && player.vy >= 0 && obstacles) {
+        const prevBottom = player.y - player.vy + CUBE_SIZE;
+        const currBottom = player.y + CUBE_SIZE;
+        const cubeL = player.x + 6;
+        const cubeR = player.x + CUBE_SIZE - 6;
+        for (const o of obstacles) {
+          if (o.type !== "block") continue;
+          if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 &&
+              prevBottom <= o.y + 6 && currBottom >= o.y) {
+            player.y = o.y - CUBE_SIZE;
+            player.vy = 0;
+            player.grounded = true;
+            break;
+          }
+        }
+      }
+
       if (player.y >= GROUND_Y - CUBE_SIZE) {
         player.y = GROUND_Y - CUBE_SIZE;
         player.vy = 0;
@@ -868,8 +893,8 @@ export default function LavaDash() {
         setDisplayScore(g.score);
 
         // Physics
-        updatePlayer(g.p1);
-        if (g.playerMode === 2) updatePlayer(g.p2);
+        updatePlayer(g.p1, g.obstacles);
+        if (g.playerMode === 2) updatePlayer(g.p2, g.obstacles);
 
         // Hold-to-jump: auto-jump when key is held and player is grounded
         const is1P = g.playerMode === 1;
@@ -933,6 +958,7 @@ export default function LavaDash() {
           // 1P mode: instant game over. 2P mode: game over if both dead
           if (g.playerMode === 1 || !g.p2.alive) {
             g.state = "dead";
+            g.deadTimer = 0;
             if (g.score > g.highScore) g.highScore = g.score;
             setDisplayHigh(g.highScore);
             setDisplayState("dead");
@@ -944,6 +970,7 @@ export default function LavaDash() {
           killPlayer(g, g.p2);
           if (!g.p1.alive) {
             g.state = "dead";
+            g.deadTimer = 0;
             if (g.score > g.highScore) g.highScore = g.score;
             setDisplayHigh(g.highScore);
             setDisplayState("dead");
@@ -1118,6 +1145,8 @@ export default function LavaDash() {
       }
 
       if (g.state === "dead") {
+        g.deadTimer++;
+
         ctx.fillStyle = "rgba(0,0,0,0.6)";
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -1142,12 +1171,19 @@ export default function LavaDash() {
         ctx.fillStyle = "#ffcc44";
         ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 300);
 
+        // Countdown or continue prompt
         ctx.font = "bold 16px 'Courier New', monospace";
-        ctx.fillStyle = "#ff8844";
-        const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
-        ctx.globalAlpha = pulse;
-        ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, 350);
-        ctx.globalAlpha = 1;
+        if (g.deadTimer < DEAD_COOLDOWN) {
+          const secondsLeft = Math.ceil((DEAD_COOLDOWN - g.deadTimer) / 60);
+          ctx.fillStyle = "#ff6644";
+          ctx.fillText(`WAIT ${secondsLeft}...`, GAME_WIDTH / 2, 350);
+        } else {
+          ctx.fillStyle = "#ff8844";
+          const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
+          ctx.globalAlpha = pulse;
+          ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, 350);
+          ctx.globalAlpha = 1;
+        }
         ctx.restore();
       }
 
