@@ -37,6 +37,80 @@ const ORB_TYPES = {
   red:    { vy: -18, color: "#ff3333", glow: "rgba(255,51,51,0.6)" },
 };
 
+// High score helpers (localStorage-backed, multi-category)
+function getCurrentPeriods() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  // ISO week number
+  const tmp = new Date(Date.UTC(year, now.getMonth(), now.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const weekNum = Math.ceil(((tmp - new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
+  return {
+    daily: `${year}-${month}-${day}`,
+    weekly: `${year}-W${String(weekNum).padStart(2, "0")}`,
+    monthly: `${year}-${month}`,
+    yearly: `${year}`,
+  };
+}
+
+function loadHighScores() {
+  try {
+    const raw = localStorage.getItem("lavadash_scores");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        allTime: parsed.allTime || 0,
+        yearly: parsed.yearly || { period: "", score: 0 },
+        monthly: parsed.monthly || { period: "", score: 0 },
+        weekly: parsed.weekly || { period: "", score: 0 },
+        daily: parsed.daily || { period: "", score: 0 },
+      };
+    }
+  } catch (e) {}
+  return {
+    allTime: 0,
+    yearly: { period: "", score: 0 },
+    monthly: { period: "", score: 0 },
+    weekly: { period: "", score: 0 },
+    daily: { period: "", score: 0 },
+  };
+}
+
+function saveHighScores(scores) {
+  try {
+    localStorage.setItem("lavadash_scores", JSON.stringify(scores));
+  } catch (e) {}
+}
+
+function updateHighScores(currentScore) {
+  const scores = loadHighScores();
+  const periods = getCurrentPeriods();
+  const newRecords = [];
+
+  // All-time
+  if (currentScore > scores.allTime) {
+    scores.allTime = currentScore;
+    newRecords.push("allTime");
+  }
+
+  // Time-based categories
+  for (const cat of ["yearly", "monthly", "weekly", "daily"]) {
+    if (scores[cat].period !== periods[cat]) {
+      // Period expired, reset
+      scores[cat] = { period: periods[cat], score: currentScore };
+      newRecords.push(cat);
+    } else if (currentScore > scores[cat].score) {
+      scores[cat].score = currentScore;
+      newRecords.push(cat);
+    }
+  }
+
+  saveHighScores(scores);
+  return { scores, newRecords };
+}
+
 // 8-bit chiptune sound generator
 const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
 
@@ -211,7 +285,8 @@ export default function LavaDash() {
     particles: [],
     volcanoSmoke: [],
     score: 0,
-    highScore: 0,
+    highScores: loadHighScores(),
+    newRecords: [],
     distance: 0,
     nextObstacle: 400,
     gameSpeed: GAME_SPEED_BASE,
@@ -231,7 +306,7 @@ export default function LavaDash() {
   const animRef = useRef(null);
   const [displayState, setDisplayState] = useState("menu");
   const [displayScore, setDisplayScore] = useState(0);
-  const [displayHigh, setDisplayHigh] = useState(0);
+  const [displayHigh, setDisplayHigh] = useState(() => loadHighScores().allTime);
 
   const selectMode = useCallback((mode) => {
     setPlayerMode(mode);
@@ -959,8 +1034,10 @@ export default function LavaDash() {
           if (g.playerMode === 1 || !g.p2.alive) {
             g.state = "dead";
             g.deadTimer = 0;
-            if (g.score > g.highScore) g.highScore = g.score;
-            setDisplayHigh(g.highScore);
+            const result = updateHighScores(g.score);
+            g.highScores = result.scores;
+            g.newRecords = result.newRecords;
+            setDisplayHigh(g.highScores.allTime);
             setDisplayState("dead");
           }
         }
@@ -971,8 +1048,10 @@ export default function LavaDash() {
           if (!g.p1.alive) {
             g.state = "dead";
             g.deadTimer = 0;
-            if (g.score > g.highScore) g.highScore = g.score;
-            setDisplayHigh(g.highScore);
+            const result = updateHighScores(g.score);
+            g.highScores = result.scores;
+            g.newRecords = result.newRecords;
+            setDisplayHigh(g.highScores.allTime);
             setDisplayState("dead");
           }
         }
@@ -1136,10 +1215,10 @@ export default function LavaDash() {
           ctx.fillText("Jump over obstacles together! Revive your partner!", GAME_WIDTH / 2, 280);
         }
 
-        if (g.highScore > 0) {
+        if (g.highScores.allTime > 0) {
           ctx.font = "bold 16px 'Courier New', monospace";
           ctx.fillStyle = "#ffcc00";
-          ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 320);
+          ctx.fillText(`ALL-TIME BEST: ${g.highScores.allTime}`, GAME_WIDTH / 2, 320);
         }
         ctx.restore();
       }
@@ -1165,23 +1244,59 @@ export default function LavaDash() {
         ctx.font = "bold 28px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffaa00";
-        ctx.fillText(`SCORE: ${g.score}`, GAME_WIDTH / 2, 265);
+        ctx.fillText(`SCORE: ${g.score}`, GAME_WIDTH / 2, 260);
 
-        ctx.font = "bold 18px 'Courier New', monospace";
-        ctx.fillStyle = "#ffcc44";
-        ctx.fillText(`HIGH SCORE: ${g.highScore}`, GAME_WIDTH / 2, 300);
+        // High score categories - two-column layout
+        const hs = g.highScores;
+        const nr = g.newRecords || [];
+        const categories = [
+          { label: "ALL-TIME", value: hs.allTime, key: "allTime" },
+          { label: "YEARLY",   value: hs.yearly.score, key: "yearly" },
+          { label: "MONTHLY",  value: hs.monthly.score, key: "monthly" },
+          { label: "WEEKLY",   value: hs.weekly.score, key: "weekly" },
+          { label: "DAILY",    value: hs.daily.score, key: "daily" },
+        ];
+
+        const colX = [GAME_WIDTH / 2 - 130, GAME_WIDTH / 2 + 40];
+        let row = 0;
+        let col = 0;
+        const startY = 290;
+        const rowH = 22;
+
+        ctx.font = "bold 13px 'Courier New', monospace";
+        ctx.textAlign = "left";
+        for (const cat of categories) {
+          const x = colX[col];
+          const y = startY + row * rowH;
+          const isNew = nr.includes(cat.key);
+
+          ctx.fillStyle = isNew ? "#ffdd44" : "#cc8855";
+          ctx.fillText(`${cat.label}: ${cat.value}`, x, y);
+
+          if (isNew) {
+            ctx.fillStyle = "#44ff66";
+            ctx.shadowColor = "#44ff66";
+            ctx.shadowBlur = 8;
+            ctx.fillText("NEW!", x + 145, y);
+            ctx.shadowBlur = 0;
+          }
+
+          col++;
+          if (col > 1) { col = 0; row++; }
+        }
 
         // Countdown or continue prompt
+        ctx.textAlign = "center";
         ctx.font = "bold 16px 'Courier New', monospace";
         if (g.deadTimer < DEAD_COOLDOWN) {
           const secondsLeft = Math.ceil((DEAD_COOLDOWN - g.deadTimer) / 60);
           ctx.fillStyle = "#ff6644";
-          ctx.fillText(`WAIT ${secondsLeft}...`, GAME_WIDTH / 2, 350);
+          ctx.fillText(`WAIT ${secondsLeft}...`, GAME_WIDTH / 2, startY + (row + 1) * rowH + 20);
         } else {
           ctx.fillStyle = "#ff8844";
           const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
           ctx.globalAlpha = pulse;
-          ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, 350);
+          ctx.fillText("TAP / SPACE TO CONTINUE", GAME_WIDTH / 2, startY + (row + 1) * rowH + 20);
           ctx.globalAlpha = 1;
         }
         ctx.restore();
@@ -1203,7 +1318,7 @@ export default function LavaDash() {
         // High score
         ctx.font = "bold 12px 'Courier New', monospace";
         ctx.fillStyle = "#cc8844";
-        ctx.fillText(`BEST: ${g.highScore}`, 20, 52);
+        ctx.fillText(`BEST: ${g.highScores.allTime}`, 20, 52);
 
         // Level indicator
         ctx.font = "bold 14px 'Courier New', monospace";
