@@ -1025,8 +1025,8 @@ export default function LavaDash() {
         if (g.nextObstacle <= 0) {
           const newObs = generateObstacle(GAME_WIDTH + 50, g.level);
           g.obstacles.push(...newObs);
-          g.nextObstacle = 270 + Math.random() * 190 - g.level * 6; // wider spacing (20% easier)
-          if (g.nextObstacle < 170) g.nextObstacle = 170;
+          g.nextObstacle = 350 + Math.random() * 250 - g.level * 5;
+          if (g.nextObstacle < 230) g.nextObstacle = 230;
         }
 
         // Move obstacles
