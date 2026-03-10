@@ -111,13 +111,25 @@ function updateHighScores(currentScore) {
   return { scores, newRecords };
 }
 
-// 8-bit chiptune sound generator
+// 8-bit chiptune sound generator — single shared AudioContext
 const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
+let sharedAudioCtx = null;
+
+function getAudioCtx() {
+  if (!AudioCtx) return null;
+  if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+    sharedAudioCtx = new AudioCtx();
+  }
+  if (sharedAudioCtx.state === "suspended") {
+    sharedAudioCtx.resume();
+  }
+  return sharedAudioCtx;
+}
 
 function playSound(type) {
-  if (!AudioCtx) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
   try {
-    const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -700,7 +712,7 @@ export default function LavaDash() {
           // Standing on top is safe; only kill on side hits
           const playerBottom = player.y + CUBE_SIZE;
           const onTop = playerBottom <= o.y + 10;
-          if (!onTop && cubeR > o.x + 3 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
+          if (!onTop && cubeR > o.x + 10 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
             return true;
           }
         }
