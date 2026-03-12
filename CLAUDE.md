@@ -12,17 +12,30 @@ There are no tests or linting configured.
 
 ## Architecture
 
-This is a single-file canvas game. The entire game lives in `LavaDash.jsx` — a single React component that uses `<canvas>` for all rendering via a `requestAnimationFrame` game loop.
+A canvas-based React game split into modules under `game/`.
 
 **Entry flow:** `index.html` → `main.jsx` → `<LavaDash />`
 
+### File structure
+
+```
+game/
+  constants.js       — dimensions, physics, COLOR_PRESETS, PAD_TYPES, ORB_TYPES
+  audio.js           — shared AudioContext singleton, playSound()
+  highScores.js      — localStorage high score CRUD (daily/weekly/monthly/yearly/all-time)
+  obstacles.js       — generateObstacle() procedural patterns
+  entities.js        — createPlayer(), createParticles()
+  physics.js         — updatePlayer, checkCollision, checkBoosts, killPlayer, revivePlayer
+  renderer.js        — all draw* functions + drawTouchZoneDivider
+  input.js           — keyboard listeners, multi-touch zone detection, mouse handlers, isTouchDevice
+LavaDash.jsx         — React component: game loop orchestration, canvas, mode selection UI
+```
+
 ### LavaDash.jsx structure
 
-- **Constants & config** (top): game dimensions, physics values (`GRAVITY`, `JUMP_FORCE`, `GAME_SPEED_BASE`), color presets, pad/orb type definitions
-- **Helper functions** (outside component): `getCurrentPeriods()`, `loadHighScores()`, `saveHighScores()`, `updateHighScores()` for localStorage-backed multi-category high scores; `playSound()` using a shared Web Audio API `AudioContext`; `generateObstacle()` for procedural obstacle patterns; `createParticles()`, `createPlayer()`
 - **Component state**: `playerMode` (null/1/2), color selections (`p1Color`, `p2Color`), display state synced from game loop
 - **`gameRef.current`**: all mutable game state (players, obstacles, score, highScores, physics) — mutated directly in the game loop, not via React state
-- **Game loop** (inside `useEffect`): handles physics, collision, rendering, and UI overlays (menu/playing/dead screens) — all drawn to canvas via 2D context
+- **Game loop** (inside `useEffect`): orchestrates physics, collision, rendering, and UI overlays (menu/playing/dead screens)
 - **Three game states**: `"menu"` → `"playing"` → `"dead"` → back to `"menu"`
 
 ### Key patterns
@@ -33,6 +46,13 @@ This is a single-file canvas game. The entire game lives in `LavaDash.jsx` — a
 - High scores persist in `localStorage` under key `"lavadash_scores"` with 5 categories: daily, weekly, monthly, yearly, all-time
 - Obstacle types: `spike` (triangle), `block` (rectangle/platform), `pad` (ground boost), `orb` (floating boost ring)
 - 2-player co-op: players revive each other after `REVIVE_FRAMES`; game over only when both are dead simultaneously
+
+### Mobile touch controls
+
+- `input.js` exports multi-touch handlers: `handleTouchStart` maps each touch to P1/P2 based on canvas half (left = P1, right = P2 in 2P mode)
+- Touch state tracked in `touchesRef` (Map of touchId → side), read each frame via `getTouchState()`
+- `isTouchDevice` flag controls touch-specific UI text and the center divider line in 2P mode
+- Canvas has `touchAction: "none"` to prevent browser zoom/scroll gestures
 
 ## Do not
 

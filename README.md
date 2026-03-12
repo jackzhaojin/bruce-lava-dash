@@ -10,22 +10,36 @@ You control a **glowing cube** dashing through a dangerous volcanic landscape. J
 
 ### Controls
 
+**1-Player Mode:**
+
 | Input | Action |
 |-------|--------|
-| `Space` | Jump |
-| `↑ Arrow` | Jump |
-| `W` | Jump |
-| `Click / Tap` | Jump |
+| `Space` / `Shift` | Jump |
+| `Click` | Jump |
+| `Tap` (mobile) | Jump |
+
+**2-Player Co-op:**
+
+| Input | Action |
+|-------|--------|
+| `Left Shift` | P1 Jump |
+| `Right Shift` | P2 Jump |
+| `Space` / `Click` | Both Jump |
+| Tap left half (mobile) | P1 Jump |
+| Tap right half (mobile) | P2 Jump |
 
 ### Features
 
 - 🟧 Classic cube character with glowing eye and rotation physics
 - 🌋 Animated volcanic world — dark skies, background volcanoes, flowing lava surface
-- 🔺 Multiple obstacle types — spikes, blocks, and combo patterns
-- 🎵 8-bit chiptune sound effects (jump, death, background beat)
+- 🔺 Multiple obstacle types — spikes, blocks, pads, orbs, and combo patterns
+- 🎵 8-bit chiptune sound effects (jump, death, boost, revive, background beat)
 - 📈 Progressive difficulty — speed and obstacle complexity increase per level
-- 💥 Particle explosion effects on death
-- 🏆 High score tracking (per session)
+- 💥 Particle explosion effects on death and boosts
+- 🏆 Persistent high scores — daily, weekly, monthly, yearly, and all-time
+- 🤝 2-player co-op — revive your partner when they die
+- 📱 Mobile touch controls — tap zones split screen for 2-player on one device
+- 🎨 Customizable player colors — 6 color presets per player
 
 ## 🚀 Quick Start
 
@@ -56,14 +70,22 @@ npm run preview
 ## 📁 Project Structure
 
 ```
-lava-dash-game/
+bruce-lava-dash/
 ├── index.html          # Entry HTML
-├── package.json        # Dependencies & scripts
-├── vite.config.js      # Vite bundler config
-├── README.md
-└── src/
-    ├── main.jsx        # React entry point
-    └── LavaDash.jsx    # The entire game (React + Canvas)
+├── main.jsx            # React entry point
+├── LavaDash.jsx        # React component: game loop, canvas, mode selection UI
+├── game/
+│   ├── constants.js    # Dimensions, physics, color presets, pad/orb types
+│   ├── audio.js        # Shared AudioContext singleton, playSound()
+│   ├── highScores.js   # localStorage high score CRUD
+│   ├── obstacles.js    # Procedural obstacle pattern generation
+│   ├── entities.js     # createPlayer(), createParticles()
+│   ├── physics.js      # Player update, collision, boosts, kill/revive
+│   ├── renderer.js     # All canvas draw functions
+│   └── input.js        # Keyboard, multi-touch zones, mouse handlers
+├── package.json
+├── vite.config.js
+└── README.md
 ```
 
 ## 🛠 Tech Stack
@@ -92,8 +114,8 @@ These were chosen by a young game designer via multiple-choice questions:
 - [ ] Collectible coins / gems
 - [ ] Multiple level themes (ice world, space, candy)
 - [ ] Custom level editor
-- [ ] Leaderboard with persistent high scores
-- [ ] Mobile-optimized touch controls
+- [x] Leaderboard with persistent high scores
+- [x] Mobile-optimized touch controls
 - [ ] Background music track (procedural chiptune)
 - [ ] Boss obstacles
 - [ ] Character skins / unlockables
