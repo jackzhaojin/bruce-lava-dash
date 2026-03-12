@@ -5,6 +5,7 @@ import {
   COLOR_PRESETS,
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
+import { gistEnabled, getScores, submitScore } from "./game/gistScores.js";
 import { playSound } from "./game/audio.js";
 import { generateObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
@@ -61,6 +62,32 @@ export default function LavaDash() {
   const [displayState, setDisplayState] = useState("menu");
   const [displayScore, setDisplayScore] = useState(0);
   const [displayHigh, setDisplayHigh] = useState(() => loadHighScores().allTime);
+  const [globalScores, setGlobalScores] = useState([]);
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem("lavadash_name") || "");
+  const [showNameInput, setShowNameInput] = useState(false);
+  const pendingScore = useRef(null);
+
+  const updateGlobalScores = useCallback((scores) => {
+    setGlobalScores(scores);
+    gameRef.current.globalScores = scores;
+  }, []);
+
+  // Fetch global scores on mount
+  useEffect(() => {
+    if (!gistEnabled) return;
+    getScores().then(updateGlobalScores).catch(() => {});
+  }, [updateGlobalScores]);
+
+  const handleNameSubmit = useCallback((name) => {
+    const trimmed = name.trim().slice(0, 16) || "Guest";
+    setPlayerName(trimmed);
+    localStorage.setItem("lavadash_name", trimmed);
+    setShowNameInput(false);
+    if (pendingScore.current !== null) {
+      submitScore(trimmed, pendingScore.current).then(updateGlobalScores).catch(() => {});
+      pendingScore.current = null;
+    }
+  }, [updateGlobalScores]);
 
   const selectMode = useCallback((mode) => {
     setPlayerMode(mode);
@@ -345,6 +372,16 @@ export default function LavaDash() {
             g.newRecords = result.newRecords;
             setDisplayHigh(g.highScores.allTime);
             setDisplayState("dead");
+            if (gistEnabled) {
+              pendingScore.current = g.score;
+              const savedName = localStorage.getItem("lavadash_name");
+              if (savedName) {
+                submitScore(savedName, g.score).then(updateGlobalScores).catch(() => {});
+                pendingScore.current = null;
+              } else {
+                setShowNameInput(true);
+              }
+            }
           }
         }
 
@@ -359,6 +396,16 @@ export default function LavaDash() {
             g.newRecords = result.newRecords;
             setDisplayHigh(g.highScores.allTime);
             setDisplayState("dead");
+            if (gistEnabled) {
+              pendingScore.current = g.score;
+              const savedName = localStorage.getItem("lavadash_name");
+              if (savedName) {
+                submitScore(savedName, g.score).then(updateGlobalScores).catch(() => {});
+                pendingScore.current = null;
+              } else {
+                setShowNameInput(true);
+              }
+            }
           }
         }
 
@@ -609,19 +656,45 @@ export default function LavaDash() {
           if (col > 1) { col = 0; row++; }
         }
 
+        // Global leaderboard
+        const gs = g.globalScores || [];
+        if (gs.length > 0) {
+          const lbY = startY + (row + 1) * rowH + 10;
+          ctx.textAlign = "center";
+          ctx.font = "bold 14px 'Courier New', monospace";
+          ctx.fillStyle = "#ff9944";
+          ctx.fillText("GLOBAL LEADERBOARD", GAME_WIDTH / 2, lbY);
+
+          ctx.font = "12px 'Courier New', monospace";
+          ctx.textAlign = "left";
+          const top5 = gs.slice(0, 5);
+          for (let i = 0; i < top5.length; i++) {
+            const entry = top5[i];
+            const ey = lbY + 18 + i * 16;
+            ctx.fillStyle = i === 0 ? "#ffdd44" : "#cc9966";
+            const rank = `${i + 1}.`;
+            const nameStr = (entry.name || "???").padEnd(10).slice(0, 10);
+            ctx.fillText(`${rank} ${nameStr} ${entry.score}`, GAME_WIDTH / 2 - 100, ey);
+          }
+        }
+
+        const continueY = gs.length > 0
+          ? startY + (row + 1) * rowH + 10 + 18 + Math.min(gs.length, 5) * 16 + 14
+          : startY + (row + 1) * rowH + 20;
+
         ctx.textAlign = "center";
         ctx.font = "bold 16px 'Courier New', monospace";
         if (g.deadTimer < DEAD_COOLDOWN) {
           const secondsLeft = Math.ceil((DEAD_COOLDOWN - g.deadTimer) / 60);
           ctx.fillStyle = "#ff6644";
-          ctx.fillText(`WAIT ${secondsLeft}...`, GAME_WIDTH / 2, startY + (row + 1) * rowH + 20);
+          ctx.fillText(`WAIT ${secondsLeft}...`, GAME_WIDTH / 2, continueY);
         } else {
           ctx.fillStyle = "#ff8844";
           const pulse2 = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
           ctx.globalAlpha = pulse2;
           ctx.fillText(
             isTouchDevice ? "TAP TO CONTINUE" : "TAP / SPACE TO CONTINUE",
-            GAME_WIDTH / 2, startY + (row + 1) * rowH + 20
+            GAME_WIDTH / 2, continueY
           );
           ctx.globalAlpha = 1;
         }
@@ -885,6 +958,79 @@ export default function LavaDash() {
           boxShadow: "0 0 40px rgba(255,68,0,0.3), inset 0 0 60px rgba(255,68,0,0.05)",
         }}
       />
+      {showNameInput && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              background: "#1a0a00",
+              border: "2px solid #ff6600",
+              borderRadius: 12,
+              padding: "24px 32px",
+              textAlign: "center",
+              boxShadow: "0 0 30px rgba(255,68,0,0.4)",
+            }}
+          >
+            <div style={{ color: "#ff9944", fontSize: 18, fontWeight: "bold", marginBottom: 12 }}>
+              ENTER YOUR NAME
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleNameSubmit(e.target.elements.name.value);
+              }}
+            >
+              <input
+                name="name"
+                autoFocus
+                maxLength={16}
+                placeholder="Your name"
+                defaultValue={playerName}
+                style={{
+                  background: "#0a0005",
+                  border: "2px solid #ff8844",
+                  borderRadius: 6,
+                  color: "#ffcc88",
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: 16,
+                  padding: "8px 12px",
+                  width: 180,
+                  textAlign: "center",
+                  outline: "none",
+                }}
+              />
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="submit"
+                  style={{
+                    background: "linear-gradient(180deg, #ff8800, #cc4400)",
+                    border: "2px solid #ffaa44",
+                    borderRadius: 8,
+                    color: "#fff",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 14,
+                    fontWeight: "bold",
+                    padding: "8px 24px",
+                    cursor: "pointer",
+                  }}
+                >
+                  SUBMIT
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <div
         style={{
           color: "#884422",
