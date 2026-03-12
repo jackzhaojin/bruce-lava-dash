@@ -110,7 +110,25 @@ export default function LavaDash() {
     gameRef.current.p1Color = COLOR_PRESETS[p1Color];
     gameRef.current.p2Color = COLOR_PRESETS[p2Color];
 
-    function gameLoop() {
+    const STEP_MS = 16; // ~60fps fixed step (integer avoids float precision issues)
+    let lastTime = 0;
+    let accumulator = 0;
+
+    function gameLoop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      accumulator += Math.min(timestamp - lastTime, 100);
+      lastTime = timestamp;
+
+      // Count how many game steps to run: at least 1 (preserves desktop feel),
+      // more if frame was slow (catches up on mobile). Cap at 4 to prevent spiral.
+      let steps = 0;
+      while (accumulator >= STEP_MS) {
+        accumulator -= STEP_MS;
+        steps++;
+      }
+      if (steps < 1) steps = 1;
+      if (steps > 4) { steps = 4; accumulator = 0; }
+
       const g = gameRef.current;
       g.frameCount++;
       const shake = g.screenShake > 0 ? (Math.random() - 0.5) * g.screenShake : 0;
@@ -192,7 +210,14 @@ export default function LavaDash() {
         ctx.stroke();
       }
 
-      if (g.state === "playing") {
+      // Fixed-step game logic: 1 step at 60fps+, multiple steps at lower fps
+      for (let step = 0; step < steps; step++) {
+
+        if (g.state === "dead") {
+          g.deadTimer++;
+        }
+
+        if (g.state === "playing") {
         // Update game
         g.distance += g.gameSpeed;
         g.groundOffset += g.gameSpeed;
@@ -315,7 +340,8 @@ export default function LavaDash() {
             }
           }
         }
-      }
+        }
+      } // end fixed-step loop
 
       // Draw obstacles
       g.obstacles.forEach((o) => {
@@ -486,8 +512,6 @@ export default function LavaDash() {
       }
 
       if (g.state === "dead") {
-        g.deadTimer++;
-
         ctx.fillStyle = "rgba(0,0,0,0.6)";
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
