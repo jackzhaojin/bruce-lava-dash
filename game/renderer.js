@@ -2,6 +2,11 @@ import {
   GAME_WIDTH, GAME_HEIGHT, GROUND_Y, CUBE_SIZE,
   PAD_TYPES, ORB_TYPES, COLOR_PRESETS, REVIVE_FRAMES,
 } from "./constants.js";
+import { isTouchDevice } from "./input.js";
+
+// On mobile Safari, shadowBlur is extremely expensive (5-10x per draw call).
+// Disable or reduce it on touch devices for performance.
+const shadow = isTouchDevice ? 0 : 1; // multiplier: 0 on mobile, 1 on desktop
 
 export function drawVolcano(ctx, x, w, h) {
   const baseY = GROUND_Y + 30;
@@ -45,7 +50,7 @@ export function drawSpike(ctx, x, y, w, h) {
   ctx.stroke();
 
   ctx.shadowColor = "#aaccff";
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 8 * shadow;
   ctx.fill();
   ctx.shadowBlur = 0;
 }
@@ -62,7 +67,7 @@ export function drawBlock(ctx, x, y, w, h) {
   ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
 
   ctx.shadowColor = "#6699cc";
-  ctx.shadowBlur = 6;
+  ctx.shadowBlur = 6 * shadow;
   ctx.strokeStyle = "#88bbee";
   ctx.strokeRect(x, y, w, h);
   ctx.shadowBlur = 0;
@@ -74,7 +79,7 @@ export function drawPad(ctx, o, frameCount) {
   if (o.activated) ctx.globalAlpha = 0.3;
 
   ctx.shadowColor = cfg.glow;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 10 * shadow;
 
   ctx.fillStyle = cfg.color;
   ctx.fillRect(o.x, o.y - o.h, o.w, o.h);
@@ -128,7 +133,7 @@ export function drawOrb(ctx, o, frameCount) {
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.shadowColor = cfg.glow;
-  ctx.shadowBlur = 12;
+  ctx.shadowBlur = 12 * shadow;
   ctx.fill();
 
   ctx.beginPath();
@@ -162,7 +167,7 @@ export function drawCube(ctx, player, isGhost, frameCount, colorObj) {
   ctx.rotate(player.rotation);
 
   ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 15;
+  ctx.shadowBlur = 15 * shadow;
 
   const cubeGrad = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
   cubeGrad.addColorStop(0, gradStart);
@@ -195,7 +200,7 @@ export function drawGhostCountdown(ctx, player, frameCount, colorObj) {
     ctx.textAlign = "center";
     ctx.fillStyle = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
     ctx.shadowColor = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 10 * shadow;
     ctx.fillText(remaining.toString(), player.x + CUBE_SIZE / 2, player.y - 12);
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -210,7 +215,7 @@ export function drawMenuCubes(ctx, frameCount, c1, c2) {
   ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
   ctx.rotate(Math.sin(frameCount * 0.02) * 0.15);
   ctx.shadowColor = c1.glow;
-  ctx.shadowBlur = 15;
+  ctx.shadowBlur = 15 * shadow;
   const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
   g1.addColorStop(0, c1.gradStart);
   g1.addColorStop(1, c1.gradEnd);
@@ -243,7 +248,7 @@ export function drawMenuCubes(ctx, frameCount, c1, c2) {
   ctx.translate(p2x + CUBE_SIZE / 2, p2y + CUBE_SIZE / 2);
   ctx.rotate(Math.sin(frameCount * 0.02 + 1) * 0.15);
   ctx.shadowColor = c2.glow;
-  ctx.shadowBlur = 15;
+  ctx.shadowBlur = 15 * shadow;
   const g2 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
   g2.addColorStop(0, c2.gradStart);
   g2.addColorStop(1, c2.gradEnd);

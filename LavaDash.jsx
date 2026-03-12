@@ -110,24 +110,63 @@ export default function LavaDash() {
     gameRef.current.p1Color = COLOR_PRESETS[p1Color];
     gameRef.current.p2Color = COLOR_PRESETS[p2Color];
 
-    const STEP_MS = 16; // ~60fps fixed step (integer avoids float precision issues)
+    const STEP_MS = 8; // ~120fps fixed step (matches user's 120Hz display)
     let lastTime = 0;
     let accumulator = 0;
 
+    // Handle tab visibility — reset timing on return from background
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        lastTime = 0;
+        accumulator = 0;
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Cache gradients outside the loop — createLinearGradient is slow on Safari iPad
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+    skyGrad.addColorStop(0, "#0a0005");
+    skyGrad.addColorStop(0.4, "#1a0008");
+    skyGrad.addColorStop(0.7, "#3d0a00");
+    skyGrad.addColorStop(1, "#661500");
+
+    const lavaGradCached = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
+    lavaGradCached.addColorStop(0, "#ff4400");
+    lavaGradCached.addColorStop(0.3, "#cc2200");
+    lavaGradCached.addColorStop(1, "#660000");
+
+    const isMobile = isTouchDevice;
+
+    // DEBUG: FPS counter
+    let fpsFrames = 0;
+    let fpsTime = 0;
+    let fpsDisplay = 0;
+    let stepsDisplay = 0;
+
     function gameLoop(timestamp) {
       if (!lastTime) lastTime = timestamp;
-      accumulator += Math.min(timestamp - lastTime, 100);
+      const delta = Math.min(timestamp - lastTime, 200);
+      accumulator += delta;
       lastTime = timestamp;
 
-      // Count how many game steps to run: at least 1 (preserves desktop feel),
-      // more if frame was slow (catches up on mobile). Cap at 4 to prevent spiral.
+      // FPS tracking
+      fpsFrames++;
+      fpsTime += delta;
+      if (fpsTime >= 1000) {
+        fpsDisplay = fpsFrames;
+        fpsFrames = 0;
+        fpsTime = 0;
+      }
+
+      // At least 1 step per frame (preserves desktop feel),
+      // more if frame was slow (catches up on mobile). Cap at 8.
       let steps = 0;
       while (accumulator >= STEP_MS) {
         accumulator -= STEP_MS;
         steps++;
       }
-      if (steps < 1) steps = 1;
-      if (steps > 4) { steps = 4; accumulator = 0; }
+      if (steps > 16) { steps = 16; accumulator = 0; }
+      stepsDisplay = steps;
 
       const g = gameRef.current;
       g.frameCount++;
@@ -139,12 +178,7 @@ export default function LavaDash() {
       ctx.save();
       ctx.translate(shake, shakeY);
 
-      // Sky gradient
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-      skyGrad.addColorStop(0, "#0a0005");
-      skyGrad.addColorStop(0.4, "#1a0008");
-      skyGrad.addColorStop(0.7, "#3d0a00");
-      skyGrad.addColorStop(1, "#661500");
+      // Sky
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
@@ -158,25 +192,24 @@ export default function LavaDash() {
         }
       });
 
-      // Background volcanoes
-      drawVolcano(ctx, -20, 200, 120);
-      drawVolcano(ctx, 250, 160, 90);
-      drawVolcano(ctx, 500, 220, 140);
-      drawVolcano(ctx, 700, 150, 80);
+      // Background volcanoes (skip on mobile — each creates 2 gradients)
+      if (!isMobile) {
+        drawVolcano(ctx, -20, 200, 120);
+        drawVolcano(ctx, 250, 160, 90);
+        drawVolcano(ctx, 500, 220, 140);
+        drawVolcano(ctx, 700, 150, 80);
+      }
 
-      // Lava ground
-      const lavaGrad = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
-      lavaGrad.addColorStop(0, "#ff4400");
-      lavaGrad.addColorStop(0.3, "#cc2200");
-      lavaGrad.addColorStop(1, "#660000");
-      ctx.fillStyle = lavaGrad;
+      // Lava ground (cached gradient)
+      ctx.fillStyle = lavaGradCached;
       ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
 
       // Animated lava surface
+      const waveStep = isMobile ? 40 : 20;
       ctx.beginPath();
       ctx.moveTo(0, GROUND_Y);
-      for (let x = 0; x <= GAME_WIDTH; x += 20) {
-        const wave = Math.sin((x + (g.distance || 0) * 2) * 0.03) * 3 + Math.sin((x + Date.now() * 0.003) * 0.06) * 2;
+      for (let x = 0; x <= GAME_WIDTH; x += waveStep) {
+        const wave = Math.sin((x + (g.distance || 0) * 2) * 0.03) * 3 + (isMobile ? 0 : Math.sin((x + Date.now() * 0.003) * 0.06) * 2);
         ctx.lineTo(x, GROUND_Y + wave);
       }
       ctx.lineTo(GAME_WIDTH, GROUND_Y - 5);
@@ -185,29 +218,33 @@ export default function LavaDash() {
       ctx.fillStyle = "#ff6600";
       ctx.fill();
 
-      // Ground line glow
-      ctx.shadowColor = "#ff4400";
-      ctx.shadowBlur = 20;
-      ctx.strokeStyle = "#ff8844";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, GROUND_Y);
-      for (let x = 0; x <= GAME_WIDTH; x += 10) {
-        const wave = Math.sin((x + (g.distance || 0) * 2) * 0.03) * 3;
-        ctx.lineTo(x, GROUND_Y + wave);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Grid lines on ground
-      ctx.strokeStyle = "rgba(255,100,0,0.15)";
-      ctx.lineWidth = 1;
-      const gridOff = g.state === "playing" ? g.groundOffset % 40 : 0;
-      for (let x = -gridOff; x <= GAME_WIDTH; x += 40) {
+      // Ground line glow (skip on mobile)
+      if (!isMobile) {
+        ctx.shadowColor = "#ff4400";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = "#ff8844";
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(x, GROUND_Y);
-        ctx.lineTo(x, GAME_HEIGHT);
+        ctx.moveTo(0, GROUND_Y);
+        for (let x = 0; x <= GAME_WIDTH; x += 10) {
+          const wave = Math.sin((x + (g.distance || 0) * 2) * 0.03) * 3;
+          ctx.lineTo(x, GROUND_Y + wave);
+        }
         ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Grid lines on ground (skip on mobile)
+      if (!isMobile) {
+        ctx.strokeStyle = "rgba(255,100,0,0.15)";
+        ctx.lineWidth = 1;
+        const gridOff = g.state === "playing" ? g.groundOffset % 40 : 0;
+        for (let x = -gridOff; x <= GAME_WIDTH; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, GROUND_Y);
+          ctx.lineTo(x, GAME_HEIGHT);
+          ctx.stroke();
+        }
       }
 
       // Fixed-step game logic: 1 step at 60fps+, multiple steps at lower fps
@@ -395,31 +432,33 @@ export default function LavaDash() {
         }
       }
 
-      // Ambient lava particles
-      if (Math.random() < 0.1) {
-        g.lavaDrops.push({
-          x: Math.random() * GAME_WIDTH,
-          y: GROUND_Y,
-          vy: -(Math.random() * 3 + 1),
-          life: 1,
-          size: Math.random() * 3 + 1,
+      // Ambient lava particles (skip on mobile — arc() per particle is expensive)
+      if (!isMobile) {
+        if (Math.random() < 0.1) {
+          g.lavaDrops.push({
+            x: Math.random() * GAME_WIDTH,
+            y: GROUND_Y,
+            vy: -(Math.random() * 3 + 1),
+            life: 1,
+            size: Math.random() * 3 + 1,
+          });
+        }
+        g.lavaDrops = g.lavaDrops.filter((d) => d.life > 0);
+        g.lavaDrops.forEach((d) => {
+          d.y += d.vy;
+          d.vy += 0.05;
+          d.life -= 0.02;
+          ctx.globalAlpha = d.life;
+          ctx.fillStyle = "#ff6600";
+          ctx.shadowColor = "#ff4400";
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
         });
+        ctx.globalAlpha = 1;
       }
-      g.lavaDrops = g.lavaDrops.filter((d) => d.life > 0);
-      g.lavaDrops.forEach((d) => {
-        d.y += d.vy;
-        d.vy += 0.05;
-        d.life -= 0.02;
-        ctx.globalAlpha = d.life;
-        ctx.fillStyle = "#ff6600";
-        ctx.shadowColor = "#ff4400";
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      });
-      ctx.globalAlpha = 1;
 
       // UI Overlay
       if (g.state === "menu") {
@@ -428,7 +467,7 @@ export default function LavaDash() {
 
         ctx.save();
         ctx.shadowColor = "#ff4400";
-        ctx.shadowBlur = 30;
+        ctx.shadowBlur = isMobile ? 0 : 30;
         ctx.font = "bold 52px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ff6600";
@@ -458,7 +497,7 @@ export default function LavaDash() {
           ctx.translate(p1x + CUBE_SIZE / 2, p1y + CUBE_SIZE / 2);
           ctx.rotate(Math.sin(g.frameCount * 0.02) * 0.15);
           ctx.shadowColor = c1.glow;
-          ctx.shadowBlur = 15;
+          ctx.shadowBlur = isMobile ? 0 : 15;
           const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
           g1.addColorStop(0, c1.gradStart);
           g1.addColorStop(1, c1.gradEnd);
@@ -517,7 +556,7 @@ export default function LavaDash() {
 
         ctx.save();
         ctx.shadowColor = "#ff0000";
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = isMobile ? 0 : 20;
         ctx.font = "bold 48px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "#ff3300";
@@ -561,7 +600,7 @@ export default function LavaDash() {
           if (isNew) {
             ctx.fillStyle = "#44ff66";
             ctx.shadowColor = "#44ff66";
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = isMobile ? 0 : 8;
             ctx.fillText("NEW!", x + 145, y);
             ctx.shadowBlur = 0;
           }
@@ -598,7 +637,7 @@ export default function LavaDash() {
         ctx.fillRect(10, 10, 160, 52);
         ctx.fillStyle = "#ffcc00";
         ctx.shadowColor = "#ff8800";
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = isMobile ? 0 : 6;
         ctx.fillText(`SCORE: ${g.score}`, 20, 35);
         ctx.shadowBlur = 0;
 
@@ -616,12 +655,21 @@ export default function LavaDash() {
         }
       }
 
+      // DEBUG: FPS + steps overlay
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#00ff00";
+      ctx.fillText(`FPS: ${fpsDisplay} | Steps: ${stepsDisplay} | Delta: ${Math.round(delta)}ms`, GAME_WIDTH - 10, GAME_HEIGHT - 10);
+
       ctx.restore();
       animRef.current = requestAnimationFrame(gameLoop);
     }
 
     animRef.current = requestAnimationFrame(gameLoop);
-    return () => cancelAnimationFrame(animRef.current);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [playerMode]);
 
   // Mode selection screen
