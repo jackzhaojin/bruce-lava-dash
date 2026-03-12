@@ -248,6 +248,14 @@ function generateObstacle(x, level) {
       { type: "orb", subtype: "yellow", x: x + 80, y: GROUND_Y - 130, w: 28, h: 28, activated: false },
       { type: "orb", subtype: "pink", x: x + 160, y: GROUND_Y - 80, w: 28, h: 28, activated: false },
     ],
+    // 3-step staircase with spikes in gaps
+    [
+      { type: "block", x, y: GROUND_Y - 36, w: 36, h: 36 },
+      { type: "spike", x: x + 50, y: GROUND_Y, w: 30, h: 40 },
+      { type: "block", x: x + 90, y: GROUND_Y - 72, w: 36, h: 72 },
+      { type: "spike", x: x + 140, y: GROUND_Y, w: 30, h: 40 },
+      { type: "block", x: x + 180, y: GROUND_Y - 108, w: 36, h: 108 },
+    ],
   ];
   const maxIdx = Math.min(patterns.length, 2 + Math.floor(level / 3));
   return patterns[Math.floor(Math.random() * maxIdx)];
