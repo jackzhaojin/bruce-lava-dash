@@ -1,5 +1,21 @@
 import { GROUND_Y } from "./constants.js";
 
+export function generateBlockTower(x) {
+  return [
+    // Column 1: 1 block
+    { type: "block", x, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "spike", x: x + 50, y: GROUND_Y, w: 30, h: 40 },
+    // Column 2: 2 blocks stacked
+    { type: "block", x: x + 100, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 100, y: GROUND_Y - 72, w: 36, h: 36 },
+    { type: "spike", x: x + 150, y: GROUND_Y, w: 30, h: 40 },
+    // Column 3: 3 blocks stacked
+    { type: "block", x: x + 200, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 200, y: GROUND_Y - 72, w: 36, h: 36 },
+    { type: "block", x: x + 200, y: GROUND_Y - 108, w: 36, h: 36 },
+  ];
+}
+
 export function generateObstacle(x, level) {
   const patterns = [
     // Single spike

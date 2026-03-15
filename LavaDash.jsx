@@ -6,7 +6,7 @@ import {
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
 import { updatePlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
@@ -87,6 +87,8 @@ export default function LavaDash() {
       g.gameSpeed = GAME_SPEED_BASE;
       g.level = 1;
       g.frameCount = 0;
+      g.spawnTowerFirst = true;
+      g.towerAt2000 = false;
       setDisplayState("playing");
       setDisplayScore(0);
     } else if (g.state === "dead") {
@@ -315,10 +317,23 @@ export default function LavaDash() {
           if (jumped) playSound("jump");
         }
 
+        // Force block tower around score 2000 (distance ~20000)
+        if (!g.towerAt2000 && g.distance >= 20000) {
+          g.obstacles.push(...generateBlockTower(GAME_WIDTH + 50));
+          g.towerAt2000 = true;
+          g.nextObstacle = 350 + Math.random() * 250;
+        }
+
         // Generate obstacles
         g.nextObstacle -= g.gameSpeed;
         if (g.nextObstacle <= 0) {
-          const newObs = generateObstacle(GAME_WIDTH + 50, g.level);
+          let newObs;
+          if (g.spawnTowerFirst) {
+            newObs = generateBlockTower(GAME_WIDTH + 50);
+            g.spawnTowerFirst = false;
+          } else {
+            newObs = generateObstacle(GAME_WIDTH + 50, g.level);
+          }
           g.obstacles.push(...newObs);
           g.nextObstacle = 350 + Math.random() * 250 - g.level * 5;
           if (g.nextObstacle < 230) g.nextObstacle = 230;
