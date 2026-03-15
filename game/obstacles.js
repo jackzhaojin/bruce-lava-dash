@@ -2,17 +2,19 @@ import { GROUND_Y } from "./constants.js";
 
 export function generateBlockTower(x) {
   return [
-    // Column 1: 1 block
+    // Row 1: 1 block high, 3 columns wide
     { type: "block", x, y: GROUND_Y - 36, w: 36, h: 36 },
-    { type: "spike", x: x + 50, y: GROUND_Y, w: 30, h: 40 },
-    // Column 2: 2 blocks stacked
-    { type: "block", x: x + 100, y: GROUND_Y - 36, w: 36, h: 36 },
-    { type: "block", x: x + 100, y: GROUND_Y - 72, w: 36, h: 36 },
-    { type: "spike", x: x + 150, y: GROUND_Y, w: 30, h: 40 },
-    // Column 3: 3 blocks stacked
-    { type: "block", x: x + 200, y: GROUND_Y - 36, w: 36, h: 36 },
-    { type: "block", x: x + 200, y: GROUND_Y - 72, w: 36, h: 36 },
-    { type: "block", x: x + 200, y: GROUND_Y - 108, w: 36, h: 36 },
+    { type: "block", x: x + 36, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 72, y: GROUND_Y - 36, w: 36, h: 36 },
+    // Row 2: 2 blocks high, 2 columns wide
+    { type: "block", x: x + 130, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 166, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 130, y: GROUND_Y - 72, w: 36, h: 36 },
+    { type: "block", x: x + 166, y: GROUND_Y - 72, w: 36, h: 36 },
+    // Row 3: 3 blocks high, 1 column wide
+    { type: "block", x: x + 260, y: GROUND_Y - 36, w: 36, h: 36 },
+    { type: "block", x: x + 260, y: GROUND_Y - 72, w: 36, h: 36 },
+    { type: "block", x: x + 260, y: GROUND_Y - 108, w: 36, h: 36 },
   ];
 }
 

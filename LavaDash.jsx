@@ -321,7 +321,7 @@ export default function LavaDash() {
         if (!g.towerAt2000 && g.distance >= 20000) {
           g.obstacles.push(...generateBlockTower(GAME_WIDTH + 50));
           g.towerAt2000 = true;
-          g.nextObstacle = 350 + Math.random() * 250;
+          g.nextObstacle = 700;
         }
 
         // Generate obstacles
@@ -331,12 +331,14 @@ export default function LavaDash() {
           if (g.spawnTowerFirst) {
             newObs = generateBlockTower(GAME_WIDTH + 50);
             g.spawnTowerFirst = false;
+            g.obstacles.push(...newObs);
+            g.nextObstacle = 700;
           } else {
             newObs = generateObstacle(GAME_WIDTH + 50, g.level);
+            g.obstacles.push(...newObs);
+            g.nextObstacle = 350 + Math.random() * 250 - g.level * 5;
+            if (g.nextObstacle < 230) g.nextObstacle = 230;
           }
-          g.obstacles.push(...newObs);
-          g.nextObstacle = 350 + Math.random() * 250 - g.level * 5;
-          if (g.nextObstacle < 230) g.nextObstacle = 230;
         }
 
         // Move obstacles
