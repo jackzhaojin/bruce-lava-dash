@@ -15,6 +15,8 @@ export function generateBlockTower(x) {
     { type: "block", x: x + 260, y: GROUND_Y - 36, w: 36, h: 36 },
     { type: "block", x: x + 260, y: GROUND_Y - 72, w: 36, h: 36 },
     { type: "block", x: x + 260, y: GROUND_Y - 108, w: 36, h: 36 },
+    // Single spike after tower
+    { type: "spike", x: x + 340, y: GROUND_Y, w: 30, h: 40 },
   ];
 }
 

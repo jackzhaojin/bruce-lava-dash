@@ -287,13 +287,13 @@ export function drawPlayerStatus(ctx, g) {
   ctx.fillRect(GAME_WIDTH - 200, statusY, 90, statusH);
   ctx.font = "bold 12px 'Courier New', monospace";
   ctx.textAlign = "left";
-  ctx.fillStyle = g.p1.alive ? c1.gradStart : c1.gradEnd;
+  ctx.fillStyle = c1.gradEnd;
   ctx.fillText(g.p1.alive ? "P1: ALIVE" : "P1: DEAD", GAME_WIDTH - 195, statusY + 15);
 
   // P2
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.fillRect(GAME_WIDTH - 105, statusY, 90, statusH);
-  ctx.fillStyle = g.p2.alive ? c2.gradStart : c2.gradEnd;
+  ctx.fillStyle = c2.gradEnd;
   ctx.fillText(g.p2.alive ? "P2: ALIVE" : "P2: DEAD", GAME_WIDTH - 100, statusY + 15);
 
   ctx.restore();
