@@ -1,4 +1,4 @@
-import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES } from "./constants.js";
+import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES, SHIP_GRAVITY, SHIP_MAX_VY, SHIP_CEILING_Y } from "./constants.js";
 import { playSound } from "./audio.js";
 import { createParticles } from "./entities.js";
 
@@ -35,6 +35,49 @@ export function updatePlayer(player, obstacles) {
   } else {
     player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
   }
+}
+
+export function updateShipPlayer(player, obstacles) {
+  player.vy += SHIP_GRAVITY;
+  if (player.vy > SHIP_MAX_VY) player.vy = SHIP_MAX_VY;
+  if (player.vy < -SHIP_MAX_VY) player.vy = -SHIP_MAX_VY;
+  player.y += player.vy;
+
+  // Land on block tops
+  if (player.alive && player.vy >= 0 && obstacles) {
+    const prevBottom = player.y - player.vy + CUBE_SIZE;
+    const currBottom = player.y + CUBE_SIZE;
+    const cubeL = player.x + 6;
+    const cubeR = player.x + CUBE_SIZE - 6;
+    for (const o of obstacles) {
+      if (o.type !== "block") continue;
+      if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 &&
+          prevBottom <= o.y + 6 && currBottom >= o.y) {
+        player.y = o.y - CUBE_SIZE;
+        player.vy = 0;
+        player.grounded = true;
+        break;
+      }
+    }
+  }
+
+  // Ceiling clamp
+  if (player.y < SHIP_CEILING_Y) {
+    player.y = SHIP_CEILING_Y;
+    player.vy = 0;
+  }
+  // Ground clamp
+  if (player.y >= GROUND_Y - CUBE_SIZE) {
+    player.y = GROUND_Y - CUBE_SIZE;
+    player.vy = 0;
+    player.grounded = true;
+  } else if (player.vy !== 0) {
+    player.grounded = false;
+  }
+
+  // Smooth tilt based on vertical velocity
+  const targetRotation = player.vy * 0.05;
+  player.rotation += (targetRotation - player.rotation) * 0.15;
 }
 
 export function checkCollision(player, obstacles) {
@@ -123,6 +166,7 @@ export function revivePlayer(g, deadPlayer, alivePlayer) {
   deadPlayer.vy = 0;
   deadPlayer.grounded = true;
   deadPlayer.rotation = 0;
+  deadPlayer.shipMode = false;
   if (alivePlayer && alivePlayer.alive) {
     deadPlayer.x = alivePlayer.x + (deadPlayer.id === 1 ? -70 : 70);
     if (deadPlayer.x < 30) deadPlayer.x = 30;

@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   GAME_WIDTH, GAME_HEIGHT, GROUND_Y, CUBE_SIZE,
   JUMP_FORCE, GAME_SPEED_BASE, DEAD_COOLDOWN, REVIVE_FRAMES,
-  COLOR_PRESETS,
+  COLOR_PRESETS, SHIP_FLY_FORCE,
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
 import { generateObstacle, generateBlockTower } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
-import { updatePlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
+import { updatePlayer, updateShipPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
   drawVolcano, drawSpike, drawBlock, drawPad, drawOrb,
-  drawCube, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
+  drawCube, drawShip, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
   drawTouchZoneDivider,
 } from "./game/renderer.js";
 import {
@@ -272,8 +272,12 @@ export default function LavaDash() {
         setDisplayScore(g.score);
 
         // Physics
-        updatePlayer(g.p1, g.obstacles);
-        if (g.playerMode === 2) updatePlayer(g.p2, g.obstacles);
+        if (g.p1.shipMode) updateShipPlayer(g.p1, g.obstacles);
+        else updatePlayer(g.p1, g.obstacles);
+        if (g.playerMode === 2) {
+          if (g.p2.shipMode) updateShipPlayer(g.p2, g.obstacles);
+          else updatePlayer(g.p2, g.obstacles);
+        }
 
         // Hold-to-jump: keyboard, mouse, and touch
         const is1P = g.playerMode === 1;
@@ -282,27 +286,40 @@ export default function LavaDash() {
         const touch = getTouchState(touchesRef);
 
         if (is1P) {
-          if ((held.shiftLeft || held.shiftRight || held.space || mHeld || touch.p1Held) && g.p1.grounded && g.p1.alive) {
+          const p1Held = held.shiftLeft || held.shiftRight || held.space || mHeld || touch.p1Held;
+          if (g.p1.shipMode && g.p1.alive) {
+            // Ship mode: hold to fly up continuously
+            if (p1Held) g.p1.vy += SHIP_FLY_FORCE;
+          } else if (p1Held && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
             playSound("jump");
           }
         } else {
           let jumped = false;
-          // ShiftLeft or touch P1 side -> P1
-          if ((held.shiftLeft || touch.p1Held) && g.p1.grounded && g.p1.alive) {
+          const p1Held = held.shiftLeft || touch.p1Held;
+          const p2Held = held.shiftRight || touch.p2Held;
+
+          // P1 input
+          if (g.p1.shipMode && g.p1.alive) {
+            if (p1Held || held.space || mHeld) g.p1.vy += SHIP_FLY_FORCE;
+          } else if ((p1Held) && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
             jumped = true;
           }
-          // ShiftRight or touch P2 side -> P2
-          if ((held.shiftRight || touch.p2Held) && g.p2.grounded && g.p2.alive) {
+
+          // P2 input
+          if (g.p2.shipMode && g.p2.alive) {
+            if (p2Held || held.space || mHeld) g.p2.vy += SHIP_FLY_FORCE;
+          } else if ((p2Held) && g.p2.grounded && g.p2.alive) {
             g.p2.vy = JUMP_FORCE;
             g.p2.grounded = false;
             jumped = true;
           }
-          // Space/mouse still jumps both (backward compatible)
-          if (held.space || mHeld) {
+
+          // Space/mouse still jumps both (backward compatible, cube mode only)
+          if ((held.space || mHeld) && !g.p1.shipMode) {
             if (g.p1.grounded && g.p1.alive) {
               g.p1.vy = JUMP_FORCE;
               g.p1.grounded = false;
@@ -317,11 +334,13 @@ export default function LavaDash() {
           if (jumped) playSound("jump");
         }
 
-        // Force block tower around score 2000 (distance ~20000)
+        // Force block tower around score 2000 (distance ~20000) + activate ship mode
         if (!g.towerAt2000 && g.distance >= 20000) {
           g.obstacles.push(...generateBlockTower(GAME_WIDTH + 50));
           g.towerAt2000 = true;
           g.nextObstacle = 700;
+          g.p1.shipMode = true;
+          if (g.playerMode === 2) g.p2.shipMode = true;
         }
 
         // Generate obstacles
@@ -423,17 +442,20 @@ export default function LavaDash() {
       const c2 = g.p2Color || COLOR_PRESETS[1];
 
       if (g.state === "playing") {
+        const drawP = (player, ghost, fc, col) =>
+          player.shipMode ? drawShip(ctx, player, ghost, fc, col) : drawCube(ctx, player, ghost, fc, col);
+
         if (g.p1.alive) {
-          drawCube(ctx, g.p1, false, g.frameCount, c1);
+          drawP(g.p1, false, g.frameCount, c1);
         } else if (g.playerMode === 2) {
-          drawCube(ctx, g.p1, true, g.frameCount, c1);
+          drawP(g.p1, true, g.frameCount, c1);
           drawGhostCountdown(ctx, g.p1, g.frameCount, c1);
         }
         if (g.playerMode === 2) {
           if (g.p2.alive) {
-            drawCube(ctx, g.p2, false, g.frameCount, c2);
+            drawP(g.p2, false, g.frameCount, c2);
           } else {
-            drawCube(ctx, g.p2, true, g.frameCount, c2);
+            drawP(g.p2, true, g.frameCount, c2);
             drawGhostCountdown(ctx, g.p2, g.frameCount, c2);
           }
         }

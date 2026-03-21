@@ -9,6 +9,12 @@ export const PARTICLE_COUNT = 20;
 export const REVIVE_FRAMES = 60;
 export const DEAD_COOLDOWN = 180;
 
+// Ship mode (activates at score 2000)
+export const SHIP_GRAVITY = 0.35;
+export const SHIP_FLY_FORCE = -0.65;
+export const SHIP_MAX_VY = 8;
+export const SHIP_CEILING_Y = 20;
+
 export const COLOR_PRESETS = [
   { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
   { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },

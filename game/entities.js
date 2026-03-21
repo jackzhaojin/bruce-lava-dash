@@ -23,5 +23,6 @@ export function createPlayer(x, id) {
     grounded: true,
     alive: true,
     ghostTimer: 0,
+    shipMode: false,
   };
 }

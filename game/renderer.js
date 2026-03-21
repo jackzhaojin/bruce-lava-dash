@@ -190,6 +190,62 @@ export function drawCube(ctx, player, isGhost, frameCount, colorObj) {
   ctx.restore();
 }
 
+export function drawShip(ctx, player, isGhost, frameCount, colorObj) {
+  const isP1 = player.id === 1;
+  const gradStart = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
+  const gradEnd = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
+  const glowColor = colorObj ? colorObj.glow : (isP1 ? "#ff8800" : "#0088ff");
+  const borderColor = colorObj ? colorObj.border : (isP1 ? "#ffcc44" : "#66ddff");
+
+  ctx.save();
+  if (isGhost) ctx.globalAlpha = 0.35;
+
+  const cx = player.x + CUBE_SIZE / 2;
+  const cy = player.y + CUBE_SIZE / 2;
+  const r = CUBE_SIZE / 2;
+
+  ctx.translate(cx, cy);
+  ctx.rotate(player.rotation);
+
+  // Glow
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 15 * shadow;
+
+  // Circle body
+  const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
+  circGrad.addColorStop(0, gradStart);
+  circGrad.addColorStop(1, gradEnd);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = circGrad;
+  ctx.fill();
+
+  // Border
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Ship arrow icon (pointing right)
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  ctx.lineTo(-6, -8);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-6, 8);
+  ctx.closePath();
+  ctx.fill();
+
+  // Small cockpit dot
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(3, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 export function drawGhostCountdown(ctx, player, frameCount, colorObj) {
   if (!player.alive && player.ghostTimer < REVIVE_FRAMES) {
     const remaining = Math.ceil((REVIVE_FRAMES - player.ghostTimer) / 60);
