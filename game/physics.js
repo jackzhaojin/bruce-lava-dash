@@ -88,11 +88,18 @@ export function checkCollision(player, obstacles) {
 
   for (const o of obstacles) {
     if (o.type === "spike") {
-      const spikeTop = o.y - o.h;
       const triL = o.x + 4;
       const triR = o.x + o.w - 4;
-      if (cubeR > triL && cubeL < triR && cubeB > spikeTop + 10 && cubeT < o.y) {
-        return true;
+      if (o.direction === "down") {
+        const spikeBottom = o.y + o.h;
+        if (cubeR > triL && cubeL < triR && cubeB > o.y && cubeT < spikeBottom - 10) {
+          return true;
+        }
+      } else {
+        const spikeTop = o.y - o.h;
+        if (cubeR > triL && cubeL < triR && cubeB > spikeTop + 10 && cubeT < o.y) {
+          return true;
+        }
       }
     } else if (o.type === "block") {
       const playerBottom = player.y + CUBE_SIZE;

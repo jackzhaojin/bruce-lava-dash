@@ -1,4 +1,4 @@
-import { GROUND_Y } from "./constants.js";
+import { GROUND_Y, SHIP_CEILING_Y } from "./constants.js";
 
 export function generateBlockTower(x) {
   return [
@@ -18,6 +18,35 @@ export function generateBlockTower(x) {
     // Single spike after tower
     { type: "spike", x: x + 340, y: GROUND_Y, w: 30, h: 40 },
   ];
+}
+
+export function generateShipObstacle(x) {
+  const obs = [];
+  const spikeSpacing = 35;
+  const numSpikes = 8;
+
+  // Ground spikes (pointing up from floor)
+  for (let i = 0; i < numSpikes; i++) {
+    obs.push({ type: "spike", x: x + i * spikeSpacing, y: GROUND_Y, w: 30, h: 40 });
+  }
+  // Ceiling spikes (pointing down from ceiling)
+  for (let i = 0; i < numSpikes; i++) {
+    obs.push({ type: "spike", x: x + i * spikeSpacing, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+  }
+
+  // Random chance to add a ground tower with spike on top
+  if (Math.random() < 0.45) {
+    const towerHeight = 2 + Math.floor(Math.random() * 3); // 2-4 blocks tall
+    const towerPos = 1 + Math.floor(Math.random() * 5); // position within spike row
+    const towerX = x + towerPos * spikeSpacing;
+    for (let j = 0; j < towerHeight; j++) {
+      obs.push({ type: "block", x: towerX, y: GROUND_Y - 36 * (j + 1), w: 36, h: 36 });
+    }
+    // Spike on top of the tower
+    obs.push({ type: "spike", x: towerX + 3, y: GROUND_Y - 36 * towerHeight, w: 30, h: 40 });
+  }
+
+  return obs;
 }
 
 export function generateObstacle(x, level) {

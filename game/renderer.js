@@ -34,13 +34,20 @@ export function drawVolcano(ctx, x, w, h) {
   ctx.fill();
 }
 
-export function drawSpike(ctx, x, y, w, h) {
+export function drawSpike(ctx, x, y, w, h, direction) {
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + w / 2, y - h);
-  ctx.lineTo(x + w, y);
+  if (direction === "down") {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.lineTo(x + w, y);
+  } else {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w / 2, y - h);
+    ctx.lineTo(x + w, y);
+  }
   ctx.closePath();
-  const grad = ctx.createLinearGradient(x, y, x + w / 2, y - h);
+  const tipY = direction === "down" ? y + h : y - h;
+  const grad = ctx.createLinearGradient(x, y, x + w / 2, tipY);
   grad.addColorStop(0, "#dddddd");
   grad.addColorStop(1, "#ffffff");
   ctx.fillStyle = grad;

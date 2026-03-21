@@ -6,7 +6,7 @@ import {
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle, generateBlockTower } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower, generateShipObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
 import { updatePlayer, updateShipPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
@@ -352,6 +352,11 @@ export default function LavaDash() {
             g.spawnTowerFirst = false;
             g.obstacles.push(...newObs);
             g.nextObstacle = 700;
+          } else if (g.towerAt2000) {
+            // Ship mode: continuous ground/ceiling spikes + towers
+            newObs = generateShipObstacle(GAME_WIDTH + 50);
+            g.obstacles.push(...newObs);
+            g.nextObstacle = 280;
           } else {
             newObs = generateObstacle(GAME_WIDTH + 50, g.level);
             g.obstacles.push(...newObs);
@@ -418,7 +423,7 @@ export default function LavaDash() {
 
       // Draw obstacles
       g.obstacles.forEach((o) => {
-        if (o.type === "spike") drawSpike(ctx, o.x, o.y, o.w, o.h);
+        if (o.type === "spike") drawSpike(ctx, o.x, o.y, o.w, o.h, o.direction);
         else if (o.type === "block") drawBlock(ctx, o.x, o.y, o.w, o.h);
         else if (o.type === "pad") drawPad(ctx, o, g.frameCount);
         else if (o.type === "orb") drawOrb(ctx, o, g.frameCount);
