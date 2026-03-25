@@ -89,6 +89,8 @@ export default function LavaDash() {
       g.frameCount = 0;
       g.spawnTowerFirst = true;
       g.towerAt2000 = false;
+      g.currentMode = "cube"; // "cube" or "ship" — alternates every 1000 score
+      g.lastModeThousand = 0;
       setDisplayState("playing");
       setDisplayScore(0);
     } else if (g.state === "dead") {
@@ -132,10 +134,15 @@ export default function LavaDash() {
     skyGrad.addColorStop(0.7, "#3d0a00");
     skyGrad.addColorStop(1, "#661500");
 
-    const lavaGradCached = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
-    lavaGradCached.addColorStop(0, "#ff4400");
-    lavaGradCached.addColorStop(0.3, "#cc2200");
-    lavaGradCached.addColorStop(1, "#660000");
+    const lavaGradCube = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
+    lavaGradCube.addColorStop(0, "#ff4400");
+    lavaGradCube.addColorStop(0.3, "#cc2200");
+    lavaGradCube.addColorStop(1, "#660000");
+
+    const lavaGradShip = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
+    lavaGradShip.addColorStop(0, "#8800ff");
+    lavaGradShip.addColorStop(0.3, "#5500cc");
+    lavaGradShip.addColorStop(1, "#220066");
 
     const isMobile = isTouchDevice;
 
@@ -202,8 +209,9 @@ export default function LavaDash() {
         drawVolcano(ctx, 700, 150, 80);
       }
 
-      // Lava ground (cached gradient)
-      ctx.fillStyle = lavaGradCached;
+      // Lava ground (different color in ship mode)
+      const inShipMode = g.currentMode === "ship";
+      ctx.fillStyle = inShipMode ? lavaGradShip : lavaGradCube;
       ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
 
       // Animated lava surface
@@ -217,14 +225,14 @@ export default function LavaDash() {
       ctx.lineTo(GAME_WIDTH, GROUND_Y - 5);
       ctx.lineTo(0, GROUND_Y - 5);
       ctx.closePath();
-      ctx.fillStyle = "#ff6600";
+      ctx.fillStyle = inShipMode ? "#aa44ff" : "#ff6600";
       ctx.fill();
 
       // Ground line glow (skip on mobile)
       if (!isMobile) {
-        ctx.shadowColor = "#ff4400";
+        ctx.shadowColor = inShipMode ? "#8800ff" : "#ff4400";
         ctx.shadowBlur = 20;
-        ctx.strokeStyle = "#ff8844";
+        ctx.strokeStyle = inShipMode ? "#bb66ff" : "#ff8844";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, GROUND_Y);
@@ -238,7 +246,7 @@ export default function LavaDash() {
 
       // Grid lines on ground (skip on mobile)
       if (!isMobile) {
-        ctx.strokeStyle = "rgba(255,100,0,0.15)";
+        ctx.strokeStyle = inShipMode ? "rgba(150,50,255,0.15)" : "rgba(255,100,0,0.15)";
         ctx.lineWidth = 1;
         const gridOff = g.state === "playing" ? g.groundOffset % 40 : 0;
         for (let x = -gridOff; x <= GAME_WIDTH; x += 40) {
@@ -334,13 +342,18 @@ export default function LavaDash() {
           if (jumped) playSound("jump");
         }
 
-        // Force block tower around score 2000 (distance ~20000) + activate ship mode
-        if (!g.towerAt2000 && g.distance >= 20000) {
-          g.obstacles.push(...generateBlockTower(GAME_WIDTH + 50));
-          g.towerAt2000 = true;
-          g.nextObstacle = 700;
-          g.p1.shipMode = true;
-          if (g.playerMode === 2) g.p2.shipMode = true;
+        // Alternate ship/cube every 1000 score: even thousands (2k,4k,6k) = ship, odd (3k,5k,7k) = cube
+        const currentThousand = Math.floor(g.score / 1000);
+        if (currentThousand >= 2 && currentThousand > g.lastModeThousand) {
+          g.lastModeThousand = currentThousand;
+          const isShip = currentThousand % 2 === 0; // even thousands = ship
+          g.currentMode = isShip ? "ship" : "cube";
+          g.towerAt2000 = isShip; // controls obstacle generation
+          g.p1.shipMode = isShip;
+          if (g.playerMode === 2) g.p2.shipMode = isShip;
+          if (isShip) {
+            g.nextObstacle = 400; // brief gap before ship obstacles start
+          }
         }
 
         // Generate obstacles
@@ -493,8 +506,8 @@ export default function LavaDash() {
           d.vy += 0.05;
           d.life -= 0.02;
           ctx.globalAlpha = d.life;
-          ctx.fillStyle = "#ff6600";
-          ctx.shadowColor = "#ff4400";
+          ctx.fillStyle = inShipMode ? "#aa44ff" : "#ff6600";
+          ctx.shadowColor = inShipMode ? "#8800ff" : "#ff4400";
           ctx.shadowBlur = 6;
           ctx.beginPath();
           ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);

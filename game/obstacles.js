@@ -34,18 +34,6 @@ export function generateShipObstacle(x) {
     obs.push({ type: "spike", x: x + i * spikeSpacing, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
   }
 
-  // Random chance to add a ground tower with spike on top
-  if (Math.random() < 0.45) {
-    const towerHeight = 2 + Math.floor(Math.random() * 3); // 2-4 blocks tall
-    const towerPos = 1 + Math.floor(Math.random() * 5); // position within spike row
-    const towerX = x + towerPos * spikeSpacing;
-    for (let j = 0; j < towerHeight; j++) {
-      obs.push({ type: "block", x: towerX, y: GROUND_Y - 36 * (j + 1), w: 36, h: 36 });
-    }
-    // Spike on top of the tower
-    obs.push({ type: "spike", x: towerX + 3, y: GROUND_Y - 36 * towerHeight, w: 30, h: 40 });
-  }
-
   return obs;
 }
 

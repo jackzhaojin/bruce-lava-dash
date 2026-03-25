@@ -173,7 +173,8 @@ export function revivePlayer(g, deadPlayer, alivePlayer) {
   deadPlayer.vy = 0;
   deadPlayer.grounded = true;
   deadPlayer.rotation = 0;
-  deadPlayer.shipMode = false;
+  // Revive in current mode (ship or cube)
+  deadPlayer.shipMode = g.currentMode === "ship";
   if (alivePlayer && alivePlayer.alive) {
     deadPlayer.x = alivePlayer.x + (deadPlayer.id === 1 ? -70 : 70);
     if (deadPlayer.x < 30) deadPlayer.x = 30;
