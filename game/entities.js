@@ -24,5 +24,6 @@ export function createPlayer(x, id) {
     alive: true,
     ghostTimer: 0,
     shipMode: false,
+    invincible: 0,
   };
 }

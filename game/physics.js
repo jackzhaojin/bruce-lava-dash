@@ -170,6 +170,7 @@ export function killPlayer(g, player) {
 export function revivePlayer(g, deadPlayer, alivePlayer) {
   deadPlayer.alive = true;
   deadPlayer.ghostTimer = 0;
+  deadPlayer.invincible = 90; // 1.5 seconds of invincibility after revive
   deadPlayer.vy = 0;
   deadPlayer.grounded = true;
   deadPlayer.rotation = 0;

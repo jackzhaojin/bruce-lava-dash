@@ -276,6 +276,8 @@ export default function LavaDash() {
         // Level up speed
         g.level = 1 + Math.floor(g.distance / 2000);
         g.gameSpeed = GAME_SPEED_BASE + g.level * 0.3;
+        // Slow down during ship mode
+        if (g.currentMode === "ship") g.gameSpeed *= 0.75;
 
         // Score
         g.score = Math.floor(g.distance / 10);
@@ -417,8 +419,12 @@ export default function LavaDash() {
         if (g.p1.alive) checkBoosts(g.p1, g.obstacles, g);
         if (g.playerMode === 2 && g.p2.alive) checkBoosts(g.p2, g.obstacles, g);
 
+        // Tick down invincibility timers
+        if (g.p1.invincible > 0) g.p1.invincible--;
+        if (g.playerMode === 2 && g.p2.invincible > 0) g.p2.invincible--;
+
         // Collision for P1
-        if (g.p1.alive && checkCollision(g.p1, g.obstacles)) {
+        if (g.p1.alive && g.p1.invincible <= 0 && checkCollision(g.p1, g.obstacles)) {
           killPlayer(g, g.p1);
           if (g.playerMode === 1 || !g.p2.alive) {
             g.state = "dead";
@@ -432,7 +438,7 @@ export default function LavaDash() {
         }
 
         // Collision for P2 (only in 2P mode)
-        if (g.playerMode === 2 && g.p2.alive && checkCollision(g.p2, g.obstacles)) {
+        if (g.playerMode === 2 && g.p2.alive && g.p2.invincible <= 0 && checkCollision(g.p2, g.obstacles)) {
           killPlayer(g, g.p2);
           if (!g.p1.alive) {
             g.state = "dead";
@@ -493,14 +499,19 @@ export default function LavaDash() {
           player.shipMode ? drawShip(ctx, player, ghost, fc, col) : drawCube(ctx, player, ghost, fc, col);
 
         if (g.p1.alive) {
-          drawP(g.p1, false, g.frameCount, c1);
+          // Blink when invincible
+          if (g.p1.invincible <= 0 || g.frameCount % 6 < 3) {
+            drawP(g.p1, false, g.frameCount, c1);
+          }
         } else if (g.playerMode === 2) {
           drawP(g.p1, true, g.frameCount, c1);
           drawGhostCountdown(ctx, g.p1, g.frameCount, c1);
         }
         if (g.playerMode === 2) {
           if (g.p2.alive) {
-            drawP(g.p2, false, g.frameCount, c2);
+            if (g.p2.invincible <= 0 || g.frameCount % 6 < 3) {
+              drawP(g.p2, false, g.frameCount, c2);
+            }
           } else {
             drawP(g.p2, true, g.frameCount, c2);
             drawGhostCountdown(ctx, g.p2, g.frameCount, c2);

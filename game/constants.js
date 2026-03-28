@@ -10,9 +10,9 @@ export const REVIVE_FRAMES = 60;
 export const DEAD_COOLDOWN = 180;
 
 // Ship mode (activates at score 2000)
-export const SHIP_GRAVITY = 0.35;
-export const SHIP_FLY_FORCE = -0.65;
-export const SHIP_MAX_VY = 8;
+export const SHIP_GRAVITY = 0.28;
+export const SHIP_FLY_FORCE = -0.7;
+export const SHIP_MAX_VY = 6;
 export const SHIP_CEILING_Y = 20;
 
 export const COLOR_PRESETS = [
@@ -26,6 +26,7 @@ export const COLOR_PRESETS = [
   { name: "Black",  gradStart: "#555555", gradEnd: "#111111", glow: "#333333", border: "#888888" },
   { name: "Gray",   gradStart: "#aaaaaa", gradEnd: "#666666", glow: "#888888", border: "#cccccc" },
   { name: "Brown",  gradStart: "#cc8844", gradEnd: "#774422", glow: "#aa6633", border: "#ddaa66" },
+  { name: "White",  gradStart: "#ffffff", gradEnd: "#cccccc", glow: "#eeeeee", border: "#ffffff" },
 ];
 
 export const PAD_TYPES = {
