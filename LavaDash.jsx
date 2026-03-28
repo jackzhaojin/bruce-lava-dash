@@ -361,6 +361,9 @@ export default function LavaDash() {
             g.towerAt2000 = false;
             g.p1.shipMode = false;
             if (g.playerMode === 2) g.p2.shipMode = false;
+            // Clear all obstacles so ship-mode spikes don't kill you
+            g.obstacles = [];
+            g.nextObstacle = 400; // brief gap before cube obstacles start
           }
         }
 
