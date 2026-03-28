@@ -91,6 +91,8 @@ export default function LavaDash() {
       g.towerAt2000 = false;
       g.currentMode = "cube"; // "cube" or "ship" — alternates every 1000 score
       g.lastModeThousand = 0;
+      g.shipCountdown = 0; // countdown frames remaining (0 = inactive)
+      g.shipCountdownText = "";
       setDisplayState("playing");
       setDisplayScore(0);
     } else if (g.state === "dead") {
@@ -347,13 +349,40 @@ export default function LavaDash() {
         if (currentThousand >= 2 && currentThousand > g.lastModeThousand) {
           g.lastModeThousand = currentThousand;
           const isShip = currentThousand % 2 === 0; // even thousands = ship
-          g.currentMode = isShip ? "ship" : "cube";
-          g.towerAt2000 = isShip; // controls obstacle generation
-          g.p1.shipMode = isShip;
-          if (g.playerMode === 2) g.p2.shipMode = isShip;
           if (isShip) {
-            g.nextObstacle = 400; // brief gap before ship obstacles start
+            // Start countdown before switching to ship mode
+            g.shipCountdown = 180; // 3 seconds at 60fps
+            g.shipCountdownTarget = true;
+            g.nextObstacle = 800; // big gap so no obstacles during countdown
+          } else {
+            g.currentMode = "cube";
+            g.towerAt2000 = false;
+            g.p1.shipMode = false;
+            if (g.playerMode === 2) g.p2.shipMode = false;
           }
+        }
+
+        // Ship countdown timer
+        if (g.shipCountdown > 0) {
+          g.shipCountdown--;
+          const secs = Math.ceil(g.shipCountdown / 60);
+          if (g.shipCountdown === 0) {
+            g.shipCountdownText = "BLAST OFF!";
+            g.shipCountdownShow = 40; // show "BLAST OFF!" for 40 frames
+            // Actually switch to ship mode
+            g.currentMode = "ship";
+            g.towerAt2000 = true;
+            g.p1.shipMode = true;
+            if (g.playerMode === 2) g.p2.shipMode = true;
+            g.nextObstacle = 400;
+          } else {
+            g.shipCountdownText = `${secs}`;
+          }
+        }
+        // Show "BLAST OFF!" text briefly after countdown ends
+        if (g.shipCountdownShow > 0) {
+          g.shipCountdownShow--;
+          if (g.shipCountdownShow === 0) g.shipCountdownText = "";
         }
 
         // Generate obstacles
@@ -709,6 +738,27 @@ export default function LavaDash() {
 
         if (g.playerMode === 2) {
           drawPlayerStatus(ctx, g);
+        }
+
+        // Ship countdown overlay
+        if (g.shipCountdownText) {
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const isBlastOff = g.shipCountdownText === "BLAST OFF!";
+          const size = isBlastOff ? 48 : 72;
+          ctx.font = `bold ${size}px 'Courier New', monospace`;
+          ctx.fillStyle = isBlastOff ? "#ff4400" : "#ffdd00";
+          ctx.shadowColor = isBlastOff ? "#ff6600" : "#ff8800";
+          ctx.shadowBlur = 20;
+          ctx.fillText(g.shipCountdownText, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30);
+          ctx.shadowBlur = 0;
+          ctx.font = "bold 16px 'Courier New', monospace";
+          ctx.fillStyle = "#ffffff";
+          if (!isBlastOff) {
+            ctx.fillText("SHIP MODE INCOMING!", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+          }
+          ctx.restore();
         }
       }
 

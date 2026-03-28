@@ -22,6 +22,10 @@ export const COLOR_PRESETS = [
   { name: "Purple", gradStart: "#cc66ff", gradEnd: "#7722cc", glow: "#aa44ff", border: "#dd99ff" },
   { name: "Pink",   gradStart: "#ff66aa", gradEnd: "#cc2266", glow: "#ff4488", border: "#ff99cc" },
   { name: "Red",    gradStart: "#ff4444", gradEnd: "#cc0000", glow: "#ff2222", border: "#ff8888" },
+  { name: "Yellow", gradStart: "#ffee44", gradEnd: "#ccaa00", glow: "#ffdd00", border: "#ffff88" },
+  { name: "Black",  gradStart: "#555555", gradEnd: "#111111", glow: "#333333", border: "#888888" },
+  { name: "Gray",   gradStart: "#aaaaaa", gradEnd: "#666666", glow: "#888888", border: "#cccccc" },
+  { name: "Brown",  gradStart: "#cc8844", gradEnd: "#774422", glow: "#aa6633", border: "#ddaa66" },
 ];
 
 export const PAD_TYPES = {
