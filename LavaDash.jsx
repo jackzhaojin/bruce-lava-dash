@@ -89,6 +89,7 @@ export default function LavaDash() {
       g.frameCount = 0;
       g.spawnTowerFirst = true;
       g.blockTowerCount = 0;
+      g.levelComplete = false;
       g.towerAt2000 = false;
       g.currentMode = "cube"; // "cube" or "ship" — alternates every 1000 score
       g.lastModeThousand = 0;
@@ -284,6 +285,20 @@ export default function LavaDash() {
         // Score
         g.score = Math.floor(g.distance / 10);
         setDisplayScore(g.score);
+
+        // Level complete at 10,000
+        if (g.score >= 10000) {
+          g.score = 10000;
+          g.state = "dead";
+          g.levelComplete = true;
+          g.deadTimer = 0;
+          const result = updateHighScores(g.score);
+          g.highScores = result.scores;
+          g.newRecords = result.newRecords;
+          setDisplayHigh(g.highScores.allTime);
+          setDisplayScore(10000);
+          setDisplayState("dead");
+        }
 
         // Physics
         if (g.p1.shipMode) updateShipPlayer(g.p1, g.obstacles);
@@ -663,12 +678,13 @@ export default function LavaDash() {
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
         ctx.save();
-        ctx.shadowColor = "#ff0000";
+        const isWin = g.levelComplete;
+        ctx.shadowColor = isWin ? "#00ff00" : "#ff0000";
         ctx.shadowBlur = isMobile ? 0 : 20;
         ctx.font = "bold 48px 'Courier New', monospace";
         ctx.textAlign = "center";
-        ctx.fillStyle = "#ff3300";
-        ctx.fillText("GAME OVER", GAME_WIDTH / 2, 130);
+        ctx.fillStyle = isWin ? "#44ff66" : "#ff3300";
+        ctx.fillText(isWin ? "LEVEL COMPLETE!" : "GAME OVER", GAME_WIDTH / 2, 130);
         ctx.shadowBlur = 0;
 
         drawMenuCubes(ctx, g.frameCount, c1, c2);
