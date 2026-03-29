@@ -273,9 +273,10 @@ export default function LavaDash() {
         g.beatTimer++;
         if (g.beatTimer % 18 === 0) playSound("bgBeat");
 
-        // Level up speed
+        // Level up speed (cap at score ~3000 to prevent excessive speed)
         g.level = 1 + Math.floor(g.distance / 2000);
-        g.gameSpeed = GAME_SPEED_BASE + g.level * 0.3;
+        const rawSpeed = GAME_SPEED_BASE + g.level * 0.3;
+        g.gameSpeed = Math.min(rawSpeed, 7.5);
         // Slow down during ship mode
         if (g.currentMode === "ship") g.gameSpeed *= 0.75;
 
