@@ -62,20 +62,27 @@ export function drawSpike(ctx, x, y, w, h, direction) {
   ctx.shadowBlur = 0;
 }
 
-export function drawBlock(ctx, x, y, w, h) {
-  ctx.fillStyle = "#334455";
+export function drawBlock(ctx, x, y, w, h, towerIdx) {
+  const isGreen = towerIdx != null && towerIdx % 2 === 0;
+  const isRed = towerIdx != null && towerIdx % 2 === 1;
+  const fill = isGreen ? "#1a4422" : isRed ? "#441a1a" : "#334455";
+  const stroke = isGreen ? "#44ff66" : isRed ? "#ff4444" : "#88bbee";
+  const inner = isGreen ? "rgba(68,255,102,0.3)" : isRed ? "rgba(255,68,68,0.3)" : "rgba(150,200,255,0.3)";
+  const glowColor = isGreen ? "#22dd44" : isRed ? "#ff2222" : "#6699cc";
+
+  ctx.fillStyle = fill;
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = "#88bbee";
+  ctx.strokeStyle = stroke;
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, w, h);
 
-  ctx.strokeStyle = "rgba(150,200,255,0.3)";
+  ctx.strokeStyle = inner;
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
 
-  ctx.shadowColor = "#6699cc";
+  ctx.shadowColor = glowColor;
   ctx.shadowBlur = 6 * shadow;
-  ctx.strokeStyle = "#88bbee";
+  ctx.strokeStyle = stroke;
   ctx.strokeRect(x, y, w, h);
   ctx.shadowBlur = 0;
 }

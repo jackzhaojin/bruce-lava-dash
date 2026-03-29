@@ -88,6 +88,7 @@ export default function LavaDash() {
       g.level = 1;
       g.frameCount = 0;
       g.spawnTowerFirst = true;
+      g.blockTowerCount = 0;
       g.towerAt2000 = false;
       g.currentMode = "cube"; // "cube" or "ship" — alternates every 1000 score
       g.lastModeThousand = 0;
@@ -411,6 +412,12 @@ export default function LavaDash() {
             g.nextObstacle = 350 + Math.random() * 250 - g.level * 5;
             if (g.nextObstacle < 230) g.nextObstacle = 230;
           }
+          // Tag blocks with alternating tower index for green/red coloring
+          const hasBlock = newObs.some((o) => o.type === "block");
+          if (hasBlock) {
+            const idx = g.blockTowerCount++;
+            newObs.forEach((o) => { if (o.type === "block") o.towerIdx = idx; });
+          }
         }
 
         // Move obstacles
@@ -476,7 +483,7 @@ export default function LavaDash() {
       // Draw obstacles
       g.obstacles.forEach((o) => {
         if (o.type === "spike") drawSpike(ctx, o.x, o.y, o.w, o.h, o.direction);
-        else if (o.type === "block") drawBlock(ctx, o.x, o.y, o.w, o.h);
+        else if (o.type === "block") drawBlock(ctx, o.x, o.y, o.w, o.h, o.towerIdx);
         else if (o.type === "pad") drawPad(ctx, o, g.frameCount);
         else if (o.type === "orb") drawOrb(ctx, o, g.frameCount);
       });
