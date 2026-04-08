@@ -15,7 +15,7 @@ export const SHIP_FLY_FORCE = -0.7;
 export const SHIP_MAX_VY = 6;
 export const SHIP_CEILING_Y = 20;
 
-export const COLOR_PRESETS = [
+const _COLOR_PRESETS = [
   { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
   { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },
   { name: "Green",  gradStart: "#44ff66", gradEnd: "#00aa22", glow: "#22dd44", border: "#88ff99" },
@@ -28,6 +28,8 @@ export const COLOR_PRESETS = [
   { name: "Brown",  gradStart: "#cc8844", gradEnd: "#774422", glow: "#aa6633", border: "#ddaa66" },
   { name: "White",  gradStart: "#ffffff", gradEnd: "#cccccc", glow: "#eeeeee", border: "#ffffff" },
 ];
+// Shuffle color order on each page load
+export const COLOR_PRESETS = _COLOR_PRESETS.sort(() => Math.random() - 0.5);
 
 export const PAD_TYPES = {
   yellow: { vy: -14, color: "#ffdd00", glow: "rgba(255,221,0,0.6)" },
