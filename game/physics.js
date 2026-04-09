@@ -140,6 +140,7 @@ export function checkBoosts(player, obstacles, g) {
       if (cfg) {
         player.vy = cfg.vy;
         player.grounded = false;
+        player.invincible = Math.max(player.invincible, 60); // 1 second of safety after pad/orb
         playSound("boost");
         const pColor = cfg.color;
         g.particles.push(...createParticles(
