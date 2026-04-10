@@ -6,7 +6,7 @@ export function updatePlayer(player, obstacles) {
   player.vy += GRAVITY;
   player.y += player.vy;
 
-  // Land on block tops (platforms)
+  // Land on block tops (platforms) — only green blocks are safe to land on
   if (player.alive && player.vy >= 0 && obstacles) {
     const prevBottom = player.y - player.vy + CUBE_SIZE;
     const currBottom = player.y + CUBE_SIZE;
@@ -14,6 +14,8 @@ export function updatePlayer(player, obstacles) {
     const cubeR = player.x + CUBE_SIZE - 6;
     for (const o of obstacles) {
       if (o.type !== "block") continue;
+      const isRed = o.towerIdx != null && o.towerIdx % 2 === 1;
+      if (isRed) continue;
       if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 &&
           prevBottom <= o.y + 6 && currBottom >= o.y) {
         player.y = o.y - CUBE_SIZE;
@@ -43,7 +45,7 @@ export function updateShipPlayer(player, obstacles) {
   if (player.vy < -SHIP_MAX_VY) player.vy = -SHIP_MAX_VY;
   player.y += player.vy;
 
-  // Land on block tops
+  // Land on block tops — only green blocks are safe to land on
   if (player.alive && player.vy >= 0 && obstacles) {
     const prevBottom = player.y - player.vy + CUBE_SIZE;
     const currBottom = player.y + CUBE_SIZE;
@@ -51,6 +53,8 @@ export function updateShipPlayer(player, obstacles) {
     const cubeR = player.x + CUBE_SIZE - 6;
     for (const o of obstacles) {
       if (o.type !== "block") continue;
+      const isRed = o.towerIdx != null && o.towerIdx % 2 === 1;
+      if (isRed) continue;
       if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 &&
           prevBottom <= o.y + 6 && currBottom >= o.y) {
         player.y = o.y - CUBE_SIZE;
@@ -102,9 +106,9 @@ export function checkCollision(player, obstacles) {
         }
       }
     } else if (o.type === "block") {
-      const playerBottom = player.y + CUBE_SIZE;
-      const onTop = playerBottom <= o.y + 10;
-      if (!onTop && cubeR > o.x + 10 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
+      const isGreen = o.towerIdx != null && o.towerIdx % 2 === 0;
+      if (isGreen) continue; // Green blocks are safe
+      if (cubeR > o.x + 10 && cubeL < o.x + o.w - 3 && cubeB > o.y + 3 && cubeT < o.y + o.h - 3) {
         return true;
       }
     }
