@@ -22,16 +22,39 @@ export function generateBlockTower(x) {
 
 export function generateShipObstacle(x) {
   const obs = [];
-  const spikeSpacing = 35;
-  const numSpikes = 8;
+  const roll = Math.random();
 
-  // Ground spikes (pointing up from floor)
-  for (let i = 0; i < numSpikes; i++) {
-    obs.push({ type: "spike", x: x + i * spikeSpacing, y: GROUND_Y, w: 30, h: 40 });
-  }
-  // Ceiling spikes (pointing down from ceiling)
-  for (let i = 0; i < numSpikes; i++) {
-    obs.push({ type: "spike", x: x + i * spikeSpacing, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+  if (roll < 0.4) {
+    // Ground & ceiling spikes
+    const spikeSpacing = 35;
+    const numSpikes = 8;
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * spikeSpacing, y: GROUND_Y, w: 30, h: 40 });
+    }
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * spikeSpacing, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+    }
+  } else if (roll < 0.7) {
+    // Green tower: 3 blocks tall with spike on top
+    const bw = 36;
+    for (let row = 0; row < 3; row++) {
+      obs.push({ type: "block", x, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
+    }
+    obs.push({ type: "spike", x: x + 3, y: GROUND_Y - bw * 3, w: 30, h: 40 });
+  } else {
+    // Double green towers with gap between them
+    const bw = 36;
+    // First tower: 3 blocks + spike
+    for (let row = 0; row < 3; row++) {
+      obs.push({ type: "block", x, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
+    }
+    obs.push({ type: "spike", x: x + 3, y: GROUND_Y - bw * 3, w: 30, h: 40 });
+    // Second tower: 3 blocks + spike
+    const x2 = x + 180;
+    for (let row = 0; row < 3; row++) {
+      obs.push({ type: "block", x: x2, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
+    }
+    obs.push({ type: "spike", x: x2 + 3, y: GROUND_Y - bw * 3, w: 30, h: 40 });
   }
 
   return obs;
