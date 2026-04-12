@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   GAME_WIDTH, GAME_HEIGHT, GROUND_Y, CUBE_SIZE,
   JUMP_FORCE, GAME_SPEED_BASE, DEAD_COOLDOWN, REVIVE_FRAMES,
-  COLOR_PRESETS, SHIP_FLY_FORCE,
+  COLOR_PRESETS, SHIP_FLY_FORCE, SHIP_CEILING_Y, BALL_FLIP_FORCE,
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle, generateBlockTower, generateShipObstacle } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
-import { updatePlayer, updateShipPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
+import { updatePlayer, updateShipPlayer, updateBallPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
   drawVolcano, drawSpike, drawBlock, drawPad, drawOrb,
-  drawCube, drawShip, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
+  drawCube, drawShip, drawBall, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
   drawTouchZoneDivider,
 } from "./game/renderer.js";
 import {
@@ -148,6 +148,11 @@ export default function LavaDash() {
     lavaGradShip.addColorStop(0.3, "#5500cc");
     lavaGradShip.addColorStop(1, "#220066");
 
+    const lavaGradBall = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
+    lavaGradBall.addColorStop(0, "#00ff44");
+    lavaGradBall.addColorStop(0.3, "#00cc22");
+    lavaGradBall.addColorStop(1, "#006600");
+
     const isMobile = isTouchDevice;
 
     // DEBUG: FPS counter
@@ -213,9 +218,10 @@ export default function LavaDash() {
         drawVolcano(ctx, 700, 150, 80);
       }
 
-      // Lava ground (different color in ship mode)
+      // Lava ground (different color per mode)
       const inShipMode = g.currentMode === "ship";
-      ctx.fillStyle = inShipMode ? lavaGradShip : lavaGradCube;
+      const inBallMode = g.currentMode === "ball";
+      ctx.fillStyle = inShipMode ? lavaGradShip : inBallMode ? lavaGradBall : lavaGradCube;
       ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
 
       // Animated lava surface
@@ -229,14 +235,14 @@ export default function LavaDash() {
       ctx.lineTo(GAME_WIDTH, GROUND_Y - 5);
       ctx.lineTo(0, GROUND_Y - 5);
       ctx.closePath();
-      ctx.fillStyle = inShipMode ? "#aa44ff" : "#ff6600";
+      ctx.fillStyle = inShipMode ? "#aa44ff" : inBallMode ? "#44ff88" : "#ff6600";
       ctx.fill();
 
       // Ground line glow (skip on mobile)
       if (!isMobile) {
-        ctx.shadowColor = inShipMode ? "#8800ff" : "#ff4400";
+        ctx.shadowColor = inShipMode ? "#8800ff" : inBallMode ? "#00ff44" : "#ff4400";
         ctx.shadowBlur = 20;
-        ctx.strokeStyle = inShipMode ? "#bb66ff" : "#ff8844";
+        ctx.strokeStyle = inShipMode ? "#bb66ff" : inBallMode ? "#66ff99" : "#ff8844";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, GROUND_Y);
@@ -250,7 +256,7 @@ export default function LavaDash() {
 
       // Grid lines on ground (skip on mobile)
       if (!isMobile) {
-        ctx.strokeStyle = inShipMode ? "rgba(150,50,255,0.15)" : "rgba(255,100,0,0.15)";
+        ctx.strokeStyle = inShipMode ? "rgba(150,50,255,0.15)" : inBallMode ? "rgba(0,255,68,0.15)" : "rgba(255,100,0,0.15)";
         ctx.lineWidth = 1;
         const gridOff = g.state === "playing" ? g.groundOffset % 40 : 0;
         for (let x = -gridOff; x <= GAME_WIDTH; x += 40) {
@@ -258,6 +264,23 @@ export default function LavaDash() {
           ctx.moveTo(x, GROUND_Y);
           ctx.lineTo(x, GAME_HEIGHT);
           ctx.stroke();
+        }
+      }
+
+      // Ceiling line for ball mode
+      if (inBallMode) {
+        ctx.fillStyle = "#00cc22";
+        ctx.fillRect(0, SHIP_CEILING_Y - 1, GAME_WIDTH, 3);
+        if (!isMobile) {
+          ctx.shadowColor = "#00ff44";
+          ctx.shadowBlur = 12;
+          ctx.strokeStyle = "#44ff88";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, SHIP_CEILING_Y);
+          ctx.lineTo(GAME_WIDTH, SHIP_CEILING_Y);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
         }
       }
 
@@ -279,8 +302,8 @@ export default function LavaDash() {
         g.level = 1 + Math.floor(g.distance / 2000);
         const rawSpeed = GAME_SPEED_BASE + g.level * 0.3;
         g.gameSpeed = Math.min(rawSpeed, 7.5);
-        // Slow down during ship mode
-        if (g.currentMode === "ship") g.gameSpeed *= 0.75;
+        // Slow down during ship/ball mode
+        if (g.currentMode === "ship" || g.currentMode === "ball") g.gameSpeed *= 0.75;
 
         // Score
         g.score = Math.floor(g.distance / 10);
@@ -302,9 +325,11 @@ export default function LavaDash() {
 
         // Physics
         if (g.p1.shipMode) updateShipPlayer(g.p1, g.obstacles);
+        else if (g.p1.ballMode) updateBallPlayer(g.p1);
         else updatePlayer(g.p1, g.obstacles);
         if (g.playerMode === 2) {
           if (g.p2.shipMode) updateShipPlayer(g.p2, g.obstacles);
+          else if (g.p2.ballMode) updateBallPlayer(g.p2);
           else updatePlayer(g.p2, g.obstacles);
         }
 
@@ -319,6 +344,14 @@ export default function LavaDash() {
           if (g.p1.shipMode && g.p1.alive) {
             // Ship mode: hold to fly up continuously
             if (p1Held) g.p1.vy += SHIP_FLY_FORCE;
+          } else if (g.p1.ballMode && g.p1.alive) {
+            // Ball mode: tap to flip gravity when grounded
+            if (p1Held && g.p1.grounded) {
+              g.p1.gravityFlipped = !g.p1.gravityFlipped;
+              g.p1.vy = g.p1.gravityFlipped ? -BALL_FLIP_FORCE : BALL_FLIP_FORCE;
+              g.p1.grounded = false;
+              playSound("jump");
+            }
           } else if (p1Held && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
@@ -332,6 +365,13 @@ export default function LavaDash() {
           // P1 input
           if (g.p1.shipMode && g.p1.alive) {
             if (p1Held || held.space || mHeld) g.p1.vy += SHIP_FLY_FORCE;
+          } else if (g.p1.ballMode && g.p1.alive) {
+            if ((p1Held || held.space || mHeld) && g.p1.grounded) {
+              g.p1.gravityFlipped = !g.p1.gravityFlipped;
+              g.p1.vy = g.p1.gravityFlipped ? -BALL_FLIP_FORCE : BALL_FLIP_FORCE;
+              g.p1.grounded = false;
+              jumped = true;
+            }
           } else if ((p1Held) && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
@@ -341,6 +381,13 @@ export default function LavaDash() {
           // P2 input
           if (g.p2.shipMode && g.p2.alive) {
             if (p2Held || held.space || mHeld) g.p2.vy += SHIP_FLY_FORCE;
+          } else if (g.p2.ballMode && g.p2.alive) {
+            if ((p2Held || held.space || mHeld) && g.p2.grounded) {
+              g.p2.gravityFlipped = !g.p2.gravityFlipped;
+              g.p2.vy = g.p2.gravityFlipped ? -BALL_FLIP_FORCE : BALL_FLIP_FORCE;
+              g.p2.grounded = false;
+              jumped = true;
+            }
           } else if ((p2Held) && g.p2.grounded && g.p2.alive) {
             g.p2.vy = JUMP_FORCE;
             g.p2.grounded = false;
@@ -348,7 +395,7 @@ export default function LavaDash() {
           }
 
           // Space/mouse still jumps both (backward compatible, cube mode only)
-          if ((held.space || mHeld) && !g.p1.shipMode) {
+          if ((held.space || mHeld) && !g.p1.shipMode && !g.p1.ballMode) {
             if (g.p1.grounded && g.p1.alive) {
               g.p1.vy = JUMP_FORCE;
               g.p1.grounded = false;
@@ -363,39 +410,61 @@ export default function LavaDash() {
           if (jumped) playSound("jump");
         }
 
-        // Alternate ship/cube every 1000 score: even thousands (2k,4k,6k) = ship, odd (3k,5k,7k) = cube
+        // Mode transitions at specific score thresholds
         const currentThousand = Math.floor(g.score / 1000);
-        if (currentThousand >= 2 && currentThousand > g.lastModeThousand) {
+        if (currentThousand > g.lastModeThousand) {
           g.lastModeThousand = currentThousand;
-          const isShip = currentThousand % 2 === 0; // even thousands = ship
-          if (isShip) {
-            // Start countdown before switching to ship mode
-            g.shipCountdown = 180; // 3 seconds at 60fps
-            g.shipCountdownTarget = true;
-            g.nextObstacle = 800; // big gap so no obstacles during countdown
-          } else {
-            g.currentMode = "cube";
-            g.towerAt2000 = false;
-            g.p1.shipMode = false;
-            if (g.playerMode === 2) g.p2.shipMode = false;
-            // Clear all obstacles so ship-mode spikes don't kill you
-            g.obstacles = [];
-            g.nextObstacle = 400; // brief gap before cube obstacles start
+          const transition = {
+            2: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
+            3: { mode: "cube" },
+            4: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
+            5: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
+            7: { mode: "cube" },
+          }[currentThousand];
+
+          if (transition) {
+            if (transition.countdown) {
+              g.shipCountdown = 180;
+              g.countdownFinalText = transition.text;
+              g.countdownSubtitle = transition.subtitle;
+              g.countdownTargetMode = transition.mode;
+              g.nextObstacle = 800;
+            } else {
+              g.currentMode = "cube";
+              g.towerAt2000 = false;
+              g.p1.shipMode = false;
+              g.p1.ballMode = false;
+              g.p1.gravityFlipped = false;
+              if (g.playerMode === 2) {
+                g.p2.shipMode = false;
+                g.p2.ballMode = false;
+                g.p2.gravityFlipped = false;
+              }
+              g.obstacles = [];
+              g.nextObstacle = 400;
+            }
           }
         }
 
-        // Ship countdown timer
+        // Mode countdown timer
         if (g.shipCountdown > 0) {
           g.shipCountdown--;
           const secs = Math.ceil(g.shipCountdown / 60);
           if (g.shipCountdown === 0) {
-            g.shipCountdownText = "BLAST OFF!";
-            g.shipCountdownShow = 40; // show "BLAST OFF!" for 40 frames
-            // Actually switch to ship mode
-            g.currentMode = "ship";
-            g.towerAt2000 = true;
-            g.p1.shipMode = true;
-            if (g.playerMode === 2) g.p2.shipMode = true;
+            g.shipCountdownText = g.countdownFinalText || "BLAST OFF!";
+            g.shipCountdownShow = 40;
+            // Switch to target mode
+            const targetMode = g.countdownTargetMode || "ship";
+            g.currentMode = targetMode;
+            g.towerAt2000 = targetMode === "ship";
+            g.p1.shipMode = targetMode === "ship";
+            g.p1.ballMode = targetMode === "ball";
+            g.p1.gravityFlipped = false;
+            if (g.playerMode === 2) {
+              g.p2.shipMode = targetMode === "ship";
+              g.p2.ballMode = targetMode === "ball";
+              g.p2.gravityFlipped = false;
+            }
             g.nextObstacle = 400;
           } else {
             g.shipCountdownText = `${secs}`;
@@ -421,6 +490,10 @@ export default function LavaDash() {
             newObs = generateShipObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
             g.nextObstacle = 280;
+          } else if (g.currentMode === "ball") {
+            newObs = generateBallObstacle(GAME_WIDTH + 50);
+            g.obstacles.push(...newObs);
+            g.nextObstacle = 300;
           } else {
             newObs = generateObstacle(GAME_WIDTH + 50, g.level);
             g.obstacles.push(...newObs);
@@ -522,7 +595,9 @@ export default function LavaDash() {
 
       if (g.state === "playing") {
         const drawP = (player, ghost, fc, col) =>
-          player.shipMode ? drawShip(ctx, player, ghost, fc, col) : drawCube(ctx, player, ghost, fc, col);
+          player.shipMode ? drawShip(ctx, player, ghost, fc, col)
+          : player.ballMode ? drawBall(ctx, player, ghost, fc, col)
+          : drawCube(ctx, player, ghost, fc, col);
 
         if (g.p1.alive) {
           // Blink when invincible
@@ -572,8 +647,8 @@ export default function LavaDash() {
           d.vy += 0.05;
           d.life -= 0.02;
           ctx.globalAlpha = d.life;
-          ctx.fillStyle = inShipMode ? "#aa44ff" : "#ff6600";
-          ctx.shadowColor = inShipMode ? "#8800ff" : "#ff4400";
+          ctx.fillStyle = inShipMode ? "#aa44ff" : inBallMode ? "#44ff88" : "#ff6600";
+          ctx.shadowColor = inShipMode ? "#8800ff" : inBallMode ? "#00ff44" : "#ff4400";
           ctx.shadowBlur = 6;
           ctx.beginPath();
           ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
@@ -778,23 +853,29 @@ export default function LavaDash() {
           drawPlayerStatus(ctx, g);
         }
 
-        // Ship countdown overlay
+        // Mode countdown overlay
         if (g.shipCountdownText) {
           ctx.save();
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          const isBlastOff = g.shipCountdownText === "BLAST OFF!";
-          const size = isBlastOff ? 48 : 72;
+          const isFinalText = isNaN(g.shipCountdownText);
+          const size = isFinalText ? 48 : 72;
           ctx.font = `bold ${size}px 'Courier New', monospace`;
-          ctx.fillStyle = isBlastOff ? "#ff4400" : "#ffdd00";
-          ctx.shadowColor = isBlastOff ? "#ff6600" : "#ff8800";
+          if (isFinalText) {
+            const isBall = g.shipCountdownText === "ROLL!";
+            ctx.fillStyle = isBall ? "#44ff66" : "#ff4400";
+            ctx.shadowColor = isBall ? "#22dd44" : "#ff6600";
+          } else {
+            ctx.fillStyle = "#ffdd00";
+            ctx.shadowColor = "#ff8800";
+          }
           ctx.shadowBlur = 20;
           ctx.fillText(g.shipCountdownText, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30);
           ctx.shadowBlur = 0;
           ctx.font = "bold 16px 'Courier New', monospace";
           ctx.fillStyle = "#ffffff";
-          if (!isBlastOff) {
-            ctx.fillText("SHIP MODE INCOMING!", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+          if (!isFinalText) {
+            ctx.fillText(g.countdownSubtitle || "INCOMING!", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
           }
           ctx.restore();
         }

@@ -15,6 +15,10 @@ export const SHIP_FLY_FORCE = -0.7;
 export const SHIP_MAX_VY = 6;
 export const SHIP_CEILING_Y = 20;
 
+// Ball mode (activates at score 4000) — gravity-flip mechanic
+export const BALL_GRAVITY = 0.5;
+export const BALL_FLIP_FORCE = 10;
+
 const _COLOR_PRESETS = [
   { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
   { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },
