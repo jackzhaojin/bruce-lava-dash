@@ -42,6 +42,10 @@ vite.config.ts.timestamp-*
 *.sln
 *.sw?
 
+# Playwright MCP and cli
+.playwright-mcp/
+.playwright-cli/
+
 # OS files
 .DS_Store
 Thumbs.db

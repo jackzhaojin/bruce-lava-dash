@@ -1,3 +1,80 @@
+import { supabase } from "./supabase.js";
+
+const DEFAULT_PLAYER_NAME = "Bruce & Dad";
+
+// --- Date helpers for period boundaries ---
+
+function startOfDay() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function startOfWeek() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function startOfMonth() {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function startOfYear() {
+  const d = new Date();
+  d.setMonth(0, 1);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+// --- Fetch leaderboard high scores from Supabase ---
+
+async function fetchTopScore(since) {
+  let query = supabase
+    .from("scores")
+    .select("score")
+    .order("score", { ascending: false })
+    .limit(1);
+  if (since) {
+    query = query.gte("created_at", since);
+  }
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) return 0;
+  return data[0].score;
+}
+
+export async function fetchHighScores() {
+  const [allTime, yearly, monthly, weekly, daily] = await Promise.all([
+    fetchTopScore(null),
+    fetchTopScore(startOfYear()),
+    fetchTopScore(startOfMonth()),
+    fetchTopScore(startOfWeek()),
+    fetchTopScore(startOfDay()),
+  ]);
+  return { allTime, yearly, monthly, weekly, daily };
+}
+
+// --- Submit a score to Supabase ---
+
+export async function submitScore(score, playerMode) {
+  const { error } = await supabase.from("scores").insert({
+    player_name: DEFAULT_PLAYER_NAME,
+    score,
+    player_mode: playerMode,
+  });
+  if (error) {
+    console.warn("Failed to submit score:", error.message);
+  }
+}
+
+// --- localStorage fallback (kept for offline / instant display) ---
+
 export function getCurrentPeriods() {
   const now = new Date();
   const year = now.getFullYear();
