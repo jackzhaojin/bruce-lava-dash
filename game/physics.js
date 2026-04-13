@@ -1,4 +1,4 @@
-import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES, SHIP_GRAVITY, SHIP_MAX_VY, SHIP_CEILING_Y } from "./constants.js";
+import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES, SHIP_GRAVITY, SHIP_MAX_VY, SHIP_CEILING_Y, BALL_GRAVITY } from "./constants.js";
 import { playSound } from "./audio.js";
 import { createParticles } from "./entities.js";
 
@@ -84,6 +84,36 @@ export function updateShipPlayer(player, obstacles) {
   player.rotation += (targetRotation - player.rotation) * 0.15;
 }
 
+export function updateBallPlayer(player) {
+  const gravDir = player.gravityFlipped ? -1 : 1;
+  player.vy += BALL_GRAVITY * gravDir;
+  player.y += player.vy;
+
+  // Ground clamp (normal gravity)
+  if (!player.gravityFlipped && player.y >= GROUND_Y - CUBE_SIZE) {
+    player.y = GROUND_Y - CUBE_SIZE;
+    player.vy = 0;
+    player.grounded = true;
+  }
+  // Ceiling clamp (flipped gravity)
+  if (player.gravityFlipped && player.y <= SHIP_CEILING_Y) {
+    player.y = SHIP_CEILING_Y;
+    player.vy = 0;
+    player.grounded = true;
+  }
+
+  // Not grounded if mid-air
+  if (!player.gravityFlipped && player.y < GROUND_Y - CUBE_SIZE) {
+    player.grounded = false;
+  }
+  if (player.gravityFlipped && player.y > SHIP_CEILING_Y) {
+    player.grounded = false;
+  }
+
+  // Ball rolls forward
+  player.rotation += 0.1;
+}
+
 export function checkCollision(player, obstacles) {
   const cubeL = player.x + 6;
   const cubeR = player.x + CUBE_SIZE - 6;
@@ -97,6 +127,16 @@ export function checkCollision(player, obstacles) {
       if (o.direction === "down") {
         const spikeBottom = o.y + o.h;
         if (cubeR > triL && cubeL < triR && cubeB > o.y && cubeT < spikeBottom - 10) {
+          return true;
+        }
+      } else if (o.direction === "left") {
+        // Spike points left: base on right (o.x+o.w), tip at o.x
+        if (cubeR > o.x + 4 && cubeL < o.x + o.w && cubeB > o.y + 4 && cubeT < o.y + o.h - 4) {
+          return true;
+        }
+      } else if (o.direction === "right") {
+        // Spike points right: base on left (o.x), tip at o.x+o.w
+        if (cubeR > o.x && cubeL < o.x + o.w - 4 && cubeB > o.y + 4 && cubeT < o.y + o.h - 4) {
           return true;
         }
       } else {
@@ -179,8 +219,10 @@ export function revivePlayer(g, deadPlayer, alivePlayer) {
   deadPlayer.vy = 0;
   deadPlayer.grounded = true;
   deadPlayer.rotation = 0;
-  // Revive in current mode (ship or cube)
+  // Revive in current mode
   deadPlayer.shipMode = g.currentMode === "ship";
+  deadPlayer.ballMode = g.currentMode === "ball";
+  deadPlayer.gravityFlipped = false;
   if (alivePlayer && alivePlayer.alive) {
     deadPlayer.x = alivePlayer.x + (deadPlayer.id === 1 ? -70 : 70);
     if (deadPlayer.x < 30) deadPlayer.x = 30;

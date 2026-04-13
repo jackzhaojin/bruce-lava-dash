@@ -60,6 +60,85 @@ export function generateShipObstacle(x) {
   return obs;
 }
 
+export function generateSandboxBallObstacle(x, onCeiling) {
+  const obs = [];
+  const bw = 36; // block width
+
+  if (onCeiling) {
+    // 3-wide x 4-tall tower hanging from the ceiling
+    for (let col = 0; col < 3; col++) {
+      for (let row = 0; row < 4; row++) {
+        obs.push({ type: "block", x: x + col * bw, y: SHIP_CEILING_Y + bw * row, w: bw, h: bw });
+      }
+    }
+    // Spikes on bottom of the tower (pointing down)
+    for (let col = 0; col < 3; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: SHIP_CEILING_Y + bw * 4, w: 30, h: 40, direction: "down" });
+    }
+    // Spikes on the left side (pointing left)
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x - 30, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "left" });
+    }
+    // Spikes on the right side (pointing right)
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x + 3 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "right" });
+    }
+  } else {
+    // 3-wide x 4-tall tower on the ground
+    for (let col = 0; col < 3; col++) {
+      for (let row = 0; row < 4; row++) {
+        obs.push({ type: "block", x: x + col * bw, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
+      }
+    }
+    // Spikes on top of the tower
+    for (let col = 0; col < 3; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: GROUND_Y - bw * 4, w: 30, h: 40 });
+    }
+    // Spikes on the left side (pointing left)
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x - 30, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "left" });
+    }
+    // Spikes on the right side (pointing right)
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x + 3 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "right" });
+    }
+  }
+  return obs;
+}
+
+export function generateBallObstacle(x) {
+  const obs = [];
+  const roll = Math.random();
+
+  if (roll < 0.3) {
+    // Ground spikes — must flip to ceiling to dodge
+    const numSpikes = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * 35, y: GROUND_Y, w: 30, h: 40 });
+    }
+  } else if (roll < 0.55) {
+    // Ceiling spikes — must be on ground to dodge
+    const numSpikes = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * 35, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+    }
+  } else if (roll < 0.8) {
+    // Alternating ground & ceiling — requires well-timed flips
+    obs.push({ type: "spike", x, y: GROUND_Y, w: 30, h: 40 });
+    obs.push({ type: "spike", x: x + 35, y: GROUND_Y, w: 30, h: 40 });
+    obs.push({ type: "spike", x: x + 120, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+    obs.push({ type: "spike", x: x + 155, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+  } else {
+    // Gauntlet — both surfaces at once with narrow gap
+    for (let i = 0; i < 5; i++) {
+      obs.push({ type: "spike", x: x + i * 40, y: GROUND_Y, w: 30, h: 30 });
+      obs.push({ type: "spike", x: x + i * 40 + 20, y: SHIP_CEILING_Y, w: 30, h: 30, direction: "down" });
+    }
+  }
+
+  return obs;
+}
+
 export function generateObstacle(x, level) {
   const patterns = [
     // Single spike

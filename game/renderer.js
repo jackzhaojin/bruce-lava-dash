@@ -40,14 +40,26 @@ export function drawSpike(ctx, x, y, w, h, direction) {
     ctx.moveTo(x, y);
     ctx.lineTo(x + w / 2, y + h);
     ctx.lineTo(x + w, y);
+  } else if (direction === "left") {
+    // Points left: base on right, tip on left
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x, y + h / 2);
+    ctx.lineTo(x + w, y + h);
+  } else if (direction === "right") {
+    // Points right: base on left, tip on right
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.lineTo(x, y + h);
   } else {
     ctx.moveTo(x, y);
     ctx.lineTo(x + w / 2, y - h);
     ctx.lineTo(x + w, y);
   }
   ctx.closePath();
-  const tipY = direction === "down" ? y + h : y - h;
-  const grad = ctx.createLinearGradient(x, y, x + w / 2, tipY);
+  let tipX = x + w / 2, tipY = direction === "down" ? y + h : y - h;
+  if (direction === "left") { tipX = x; tipY = y + h / 2; }
+  else if (direction === "right") { tipX = x + w; tipY = y + h / 2; }
+  const grad = ctx.createLinearGradient(x, y, tipX, tipY);
   grad.addColorStop(0, "#dddddd");
   grad.addColorStop(1, "#ffffff");
   ctx.fillStyle = grad;
@@ -256,6 +268,55 @@ export function drawShip(ctx, player, isGhost, frameCount, colorObj) {
   ctx.beginPath();
   ctx.arc(3, 0, 2.5, 0, Math.PI * 2);
   ctx.fill();
+
+  ctx.restore();
+}
+
+export function drawBall(ctx, player, isGhost, frameCount, colorObj) {
+  const isP1 = player.id === 1;
+  const gradStart = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
+  const gradEnd = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
+  const glowColor = colorObj ? colorObj.glow : (isP1 ? "#ff8800" : "#0088ff");
+  const borderColor = colorObj ? colorObj.border : (isP1 ? "#ffcc44" : "#66ddff");
+
+  ctx.save();
+  if (isGhost) ctx.globalAlpha = 0.35;
+
+  const cx = player.x + CUBE_SIZE / 2;
+  const cy = player.y + CUBE_SIZE / 2;
+  const r = CUBE_SIZE / 2;
+
+  ctx.translate(cx, cy);
+  ctx.rotate(player.rotation);
+
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 15 * shadow;
+
+  const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
+  circGrad.addColorStop(0, gradStart);
+  circGrad.addColorStop(1, gradEnd);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = circGrad;
+  ctx.fill();
+
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Cross lines to show rotation
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.55, 0);
+  ctx.lineTo(r * 0.55, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.55);
+  ctx.lineTo(0, r * 0.55);
+  ctx.stroke();
 
   ctx.restore();
 }
