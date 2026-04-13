@@ -40,14 +40,26 @@ export function drawSpike(ctx, x, y, w, h, direction) {
     ctx.moveTo(x, y);
     ctx.lineTo(x + w / 2, y + h);
     ctx.lineTo(x + w, y);
+  } else if (direction === "left") {
+    // Points left: base on right, tip on left
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x, y + h / 2);
+    ctx.lineTo(x + w, y + h);
+  } else if (direction === "right") {
+    // Points right: base on left, tip on right
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.lineTo(x, y + h);
   } else {
     ctx.moveTo(x, y);
     ctx.lineTo(x + w / 2, y - h);
     ctx.lineTo(x + w, y);
   }
   ctx.closePath();
-  const tipY = direction === "down" ? y + h : y - h;
-  const grad = ctx.createLinearGradient(x, y, x + w / 2, tipY);
+  let tipX = x + w / 2, tipY = direction === "down" ? y + h : y - h;
+  if (direction === "left") { tipX = x; tipY = y + h / 2; }
+  else if (direction === "right") { tipX = x + w; tipY = y + h / 2; }
+  const grad = ctx.createLinearGradient(x, y, tipX, tipY);
   grad.addColorStop(0, "#dddddd");
   grad.addColorStop(1, "#ffffff");
   ctx.fillStyle = grad;

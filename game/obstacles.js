@@ -75,13 +75,13 @@ export function generateSandboxBallObstacle(x, onCeiling) {
     for (let col = 0; col < 3; col++) {
       obs.push({ type: "spike", x: x + col * bw + 3, y: SHIP_CEILING_Y + bw * 4, w: 30, h: 40, direction: "down" });
     }
-    // Spikes on the left side
+    // Spikes on the left side (pointing left)
     for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x - 30, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30 });
+      obs.push({ type: "spike", x: x - 30, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "left" });
     }
-    // Spikes on the right side
+    // Spikes on the right side (pointing right)
     for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x + 3 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30 });
+      obs.push({ type: "spike", x: x + 3 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "right" });
     }
   } else {
     // 3-wide x 4-tall tower on the ground
@@ -94,13 +94,13 @@ export function generateSandboxBallObstacle(x, onCeiling) {
     for (let col = 0; col < 3; col++) {
       obs.push({ type: "spike", x: x + col * bw + 3, y: GROUND_Y - bw * 4, w: 30, h: 40 });
     }
-    // Spikes on the left side
+    // Spikes on the left side (pointing left)
     for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x - 30, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30 });
+      obs.push({ type: "spike", x: x - 30, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "left" });
     }
-    // Spikes on the right side
+    // Spikes on the right side (pointing right)
     for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x + 3 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30 });
+      obs.push({ type: "spike", x: x + 3 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "right" });
     }
   }
   return obs;

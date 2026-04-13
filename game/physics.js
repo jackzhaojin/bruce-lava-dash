@@ -129,6 +129,16 @@ export function checkCollision(player, obstacles) {
         if (cubeR > triL && cubeL < triR && cubeB > o.y && cubeT < spikeBottom - 10) {
           return true;
         }
+      } else if (o.direction === "left") {
+        // Spike points left: base on right (o.x+o.w), tip at o.x
+        if (cubeR > o.x + 4 && cubeL < o.x + o.w && cubeB > o.y + 4 && cubeT < o.y + o.h - 4) {
+          return true;
+        }
+      } else if (o.direction === "right") {
+        // Spike points right: base on left (o.x), tip at o.x+o.w
+        if (cubeR > o.x && cubeL < o.x + o.w - 4 && cubeB > o.y + 4 && cubeT < o.y + o.h - 4) {
+          return true;
+        }
       } else {
         const spikeTop = o.y - o.h;
         if (cubeR > triL && cubeL < triR && cubeB > spikeTop + 10 && cubeT < o.y) {
