@@ -545,16 +545,12 @@ export default function LavaDash() {
             newObs = generateShipObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
             g.nextObstacle = 280;
-          } else if (g.currentMode === "ball" && g.sandboxMode) {
+          } else if (g.currentMode === "ball") {
             const onCeiling = !!(g.sandboxTowerCount % 2);
             newObs = generateSandboxBallObstacle(GAME_WIDTH + 50, onCeiling);
             g.sandboxTowerCount = (g.sandboxTowerCount || 0) + 1;
             g.obstacles.push(...newObs);
             g.nextObstacle = 900; // big gap between towers
-          } else if (g.currentMode === "ball") {
-            newObs = generateBallObstacle(GAME_WIDTH + 50);
-            g.obstacles.push(...newObs);
-            g.nextObstacle = 300;
           } else {
             newObs = generateObstacle(GAME_WIDTH + 50, g.level);
             g.obstacles.push(...newObs);
