@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - generic [ref=e4]: 🌋 LAVA DASH
+  - generic [ref=e5]: Built by Father & Son
+  - generic [ref=e6]: SELECT MODE
+  - generic [ref=e7]:
+    - generic [ref=e8]: P1 COLOR
+    - generic [ref=e9]:
+      - generic "Green" [ref=e10] [cursor=pointer]
+      - generic "Brown" [ref=e11]
+      - generic "Orange" [ref=e12] [cursor=pointer]
+      - generic "Gray" [ref=e13] [cursor=pointer]
+      - generic "Purple" [ref=e14] [cursor=pointer]
+      - generic "Pink" [ref=e15] [cursor=pointer]
+      - generic "Blue" [ref=e16] [cursor=pointer]
+      - generic "Red" [ref=e17] [cursor=pointer]
+      - generic "White" [ref=e18] [cursor=pointer]
+      - generic "Black" [ref=e19] [cursor=pointer]
+      - generic "Yellow" [ref=e20] [cursor=pointer]
+    - generic [ref=e21]: P2 COLOR
+    - generic [ref=e22]:
+      - generic "Green" [ref=e23]
+      - generic "Brown" [ref=e24] [cursor=pointer]
+      - generic "Orange" [ref=e25] [cursor=pointer]
+      - generic "Gray" [ref=e26] [cursor=pointer]
+      - generic "Purple" [ref=e27] [cursor=pointer]
+      - generic "Pink" [ref=e28] [cursor=pointer]
+      - generic "Blue" [ref=e29] [cursor=pointer]
+      - generic "Red" [ref=e30] [cursor=pointer]
+      - generic "White" [ref=e31] [cursor=pointer]
+      - generic "Black" [ref=e32] [cursor=pointer]
+      - generic "Yellow" [ref=e33] [cursor=pointer]
+  - generic [ref=e34]:
+    - button "🎮 1 PLAYER" [ref=e35] [cursor=pointer]
+    - button "🤝 2 PLAYERS" [ref=e36] [cursor=pointer]
+  - generic [ref=e37]: "2-Player mode: team up & revive each other!"

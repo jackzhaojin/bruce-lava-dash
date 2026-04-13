@@ -23,6 +23,7 @@ import {
 export default function LavaDash() {
   const canvasRef = useRef(null);
   const [playerMode, setPlayerMode] = useState(null);
+  const [sandboxStart, setSandboxStart] = useState(null); // null = normal, number = starting score
   const [p1Color, setP1Color] = useState(0);
   const [p2Color, setP2Color] = useState(1);
   const keysHeld = useRef({ shiftLeft: false, shiftRight: false, space: false });
@@ -81,28 +82,48 @@ export default function LavaDash() {
       }
       g.obstacles = [];
       g.particles = [];
-      g.score = 0;
-      g.distance = 0;
+      // Sandbox mode: start at a specific score
+      const startScore = sandboxStart || 0;
+      g.distance = startScore * 10;
+      g.score = startScore;
       g.nextObstacle = 400;
       g.gameSpeed = GAME_SPEED_BASE;
-      g.level = 1;
+      g.level = 1 + Math.floor(g.distance / 2000);
       g.frameCount = 0;
       g.spawnTowerFirst = true;
       g.blockTowerCount = 0;
       g.levelComplete = false;
-      g.towerAt2000 = false;
-      g.currentMode = "cube"; // "cube" or "ship" — alternates every 1000 score
-      g.lastModeThousand = 0;
-      g.shipCountdown = 0; // countdown frames remaining (0 = inactive)
+      // Determine starting mode based on score thresholds
+      const startThousand = Math.floor(startScore / 1000);
+      let startMode = "cube";
+      if (startScore > 0) {
+        // Walk through thresholds to find the active mode at this score
+        const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "ship", 7: "cube" };
+        for (let t = 1; t <= startThousand; t++) {
+          if (transitions[t]) startMode = transitions[t];
+        }
+      }
+      g.currentMode = startMode;
+      g.towerAt2000 = startMode === "ship";
+      g.lastModeThousand = startThousand;
+      g.shipCountdown = 0;
       g.shipCountdownText = "";
+      g.p1.shipMode = startMode === "ship";
+      g.p1.ballMode = startMode === "ball";
+      g.p1.gravityFlipped = false;
+      if (g.playerMode === 2) {
+        g.p2.shipMode = startMode === "ship";
+        g.p2.ballMode = startMode === "ball";
+        g.p2.gravityFlipped = false;
+      }
       setDisplayState("playing");
-      setDisplayScore(0);
+      setDisplayScore(startScore);
     } else if (g.state === "dead") {
       if (g.deadTimer < DEAD_COOLDOWN) return;
       g.state = "menu";
       setDisplayState("menu");
     }
-  }, []);
+  }, [sandboxStart]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -1053,6 +1074,40 @@ export default function LavaDash() {
           >
             {"\u{1F91D}"} 2 PLAYERS
           </button>
+        </div>
+        {/* Sandbox toggle */}
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <button
+            onClick={() => setSandboxStart(sandboxStart ? null : 4000)}
+            style={{
+              background: sandboxStart
+                ? "linear-gradient(180deg, #44cc44, #228822)"
+                : "linear-gradient(180deg, #555, #333)",
+              border: sandboxStart ? "2px solid #66ff66" : "2px solid #666",
+              borderRadius: 12,
+              color: "#fff",
+              fontFamily: "'Courier New', monospace",
+              fontSize: 14,
+              fontWeight: "bold",
+              padding: "12px 28px",
+              cursor: "pointer",
+              boxShadow: sandboxStart ? "0 0 20px rgba(68,204,68,0.4)" : "none",
+              transition: "transform 0.1s, box-shadow 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = "scale(1)";
+            }}
+          >
+            {sandboxStart ? "\u2705 SANDBOX: START @ 4000" : "\u{1F9EA} SANDBOX MODE"}
+          </button>
+          {sandboxStart && (
+            <div style={{ color: "#66ff66", fontSize: 11, marginTop: 6, letterSpacing: 1 }}>
+              Starts in Ball Mode — pick 1P or 2P above
+            </div>
+          )}
         </div>
         <div
           style={{
