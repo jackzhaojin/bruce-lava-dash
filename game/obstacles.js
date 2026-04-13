@@ -60,6 +60,52 @@ export function generateShipObstacle(x) {
   return obs;
 }
 
+export function generateSandboxBallObstacle(x, onCeiling) {
+  const obs = [];
+  const bw = 36; // block width
+
+  if (onCeiling) {
+    // 3-wide x 4-tall tower hanging from the ceiling
+    for (let col = 0; col < 3; col++) {
+      for (let row = 0; row < 4; row++) {
+        obs.push({ type: "block", x: x + col * bw, y: SHIP_CEILING_Y + bw * row, w: bw, h: bw });
+      }
+    }
+    // Spikes on bottom of the tower (pointing down)
+    for (let col = 0; col < 3; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: SHIP_CEILING_Y + bw * 4, w: 30, h: 40, direction: "down" });
+    }
+    // Spikes on the left side
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x - 30, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30 });
+    }
+    // Spikes on the right side
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x + 3 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30 });
+    }
+  } else {
+    // 3-wide x 4-tall tower on the ground
+    for (let col = 0; col < 3; col++) {
+      for (let row = 0; row < 4; row++) {
+        obs.push({ type: "block", x: x + col * bw, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
+      }
+    }
+    // Spikes on top of the tower
+    for (let col = 0; col < 3; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: GROUND_Y - bw * 4, w: 30, h: 40 });
+    }
+    // Spikes on the left side
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x - 30, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30 });
+    }
+    // Spikes on the right side
+    for (let row = 0; row < 4; row++) {
+      obs.push({ type: "spike", x: x + 3 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30 });
+    }
+  }
+  return obs;
+}
+
 export function generateBallObstacle(x) {
   const obs = [];
   const roll = Math.random();

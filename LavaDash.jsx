@@ -6,7 +6,7 @@ import {
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
 import { updatePlayer, updateShipPlayer, updateBallPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
@@ -84,6 +84,8 @@ export default function LavaDash() {
       g.particles = [];
       // Sandbox mode: start at a specific score
       const startScore = sandboxStart || 0;
+      g.sandboxMode = !!sandboxStart;
+      g.sandboxTowerCount = 0;
       g.distance = startScore * 10;
       g.score = startScore;
       g.nextObstacle = 400;
@@ -96,8 +98,10 @@ export default function LavaDash() {
       // Determine starting mode based on score thresholds
       const startThousand = Math.floor(startScore / 1000);
       let startMode = "cube";
-      if (startScore > 0) {
-        // Walk through thresholds to find the active mode at this score
+      if (sandboxStart) {
+        // Sandbox always starts in ball mode
+        startMode = "ball";
+      } else if (startScore > 0) {
         const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "ship", 7: "cube" };
         for (let t = 1; t <= startThousand; t++) {
           if (transitions[t]) startMode = transitions[t];
@@ -116,6 +120,8 @@ export default function LavaDash() {
         g.p2.ballMode = startMode === "ball";
         g.p2.gravityFlipped = false;
       }
+      // In sandbox, delay first obstacle by 250 score (2500 distance)
+      if (sandboxStart) g.nextObstacle = 2500;
       setDisplayState("playing");
       setDisplayScore(startScore);
     } else if (g.state === "dead") {
@@ -511,6 +517,12 @@ export default function LavaDash() {
             newObs = generateShipObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
             g.nextObstacle = 280;
+          } else if (g.currentMode === "ball" && g.sandboxMode) {
+            const onCeiling = !!(g.sandboxTowerCount % 2);
+            newObs = generateSandboxBallObstacle(GAME_WIDTH + 50, onCeiling);
+            g.sandboxTowerCount = (g.sandboxTowerCount || 0) + 1;
+            g.obstacles.push(...newObs);
+            g.nextObstacle = 900; // big gap between towers
           } else if (g.currentMode === "ball") {
             newObs = generateBallObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
