@@ -4,7 +4,7 @@ import {
   JUMP_FORCE, GAME_SPEED_BASE, DEAD_COOLDOWN, REVIVE_FRAMES,
   COLOR_PRESETS, SHIP_FLY_FORCE, SHIP_CEILING_Y, BALL_FLIP_FORCE,
 } from "./game/constants.js";
-import { loadHighScores, updateHighScores } from "./game/highScores.js";
+import { loadHighScores, updateHighScores, fetchHighScores, submitScore } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
 import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
@@ -131,6 +131,18 @@ export default function LavaDash() {
     }
   }, [sandboxStart]);
 
+  // Fetch cloud high scores on mount
+  useEffect(() => {
+    fetchHighScores().then((cloud) => {
+      const g = gameRef.current;
+      g.cloudScores = cloud;
+      // Use cloud scores as the display source if they're higher
+      if (cloud.allTime > g.highScores.allTime) {
+        setDisplayHigh(cloud.allTime);
+      }
+    }).catch(() => {});
+  }, []);
+
   // Keyboard listeners
   useEffect(() => {
     return setupKeyboardListeners(keysHeld, gameRef, startGame);
@@ -187,6 +199,25 @@ export default function LavaDash() {
     let fpsTime = 0;
     let fpsDisplay = 0;
     let stepsDisplay = 0;
+
+    // Handle death: update local scores, submit to cloud only if a new record
+    function handleDeath(g) {
+      const result = updateHighScores(g.score);
+      g.highScores = result.scores;
+      g.newRecords = result.newRecords;
+      setDisplayHigh(g.highScores.allTime);
+      // Only submit to Supabase if this was a new record in any category
+      if (result.newRecords.length > 0) {
+        submitScore(g.score, g.playerMode).then(() =>
+          fetchHighScores().then((cloud) => {
+            g.cloudScores = cloud;
+            const mergedAllTime = Math.max(g.highScores.allTime, cloud.allTime);
+            g.highScores.allTime = mergedAllTime;
+            setDisplayHigh(mergedAllTime);
+          })
+        ).catch(() => {});
+      }
+    }
 
     function gameLoop(timestamp) {
       if (!lastTime) lastTime = timestamp;
@@ -342,10 +373,7 @@ export default function LavaDash() {
           g.state = "dead";
           g.levelComplete = true;
           g.deadTimer = 0;
-          const result = updateHighScores(g.score);
-          g.highScores = result.scores;
-          g.newRecords = result.newRecords;
-          setDisplayHigh(g.highScores.allTime);
+          handleDeath(g);
           setDisplayScore(10000);
           setDisplayState("dead");
         }
@@ -561,10 +589,7 @@ export default function LavaDash() {
           if (g.playerMode === 1 || !g.p2.alive) {
             g.state = "dead";
             g.deadTimer = 0;
-            const result = updateHighScores(g.score);
-            g.highScores = result.scores;
-            g.newRecords = result.newRecords;
-            setDisplayHigh(g.highScores.allTime);
+            handleDeath(g);
             setDisplayState("dead");
           }
         }
@@ -575,10 +600,7 @@ export default function LavaDash() {
           if (!g.p1.alive) {
             g.state = "dead";
             g.deadTimer = 0;
-            const result = updateHighScores(g.score);
-            g.highScores = result.scores;
-            g.newRecords = result.newRecords;
-            setDisplayHigh(g.highScores.allTime);
+            handleDeath(g);
             setDisplayState("dead");
           }
         }
@@ -773,10 +795,11 @@ export default function LavaDash() {
           ctx.fillText("Jump over obstacles together! Revive your partner!", GAME_WIDTH / 2, 280);
         }
 
-        if (g.highScores.allTime > 0) {
+        const menuBest = Math.max(g.highScores.allTime, (g.cloudScores || {}).allTime || 0);
+        if (menuBest > 0) {
           ctx.font = "bold 16px 'Courier New', monospace";
           ctx.fillStyle = "#ffcc00";
-          ctx.fillText(`ALL-TIME BEST: ${g.highScores.allTime}`, GAME_WIDTH / 2, 320);
+          ctx.fillText(`ALL-TIME BEST: ${menuBest}`, GAME_WIDTH / 2, 320);
         }
         ctx.restore();
       }
@@ -802,15 +825,16 @@ export default function LavaDash() {
         ctx.fillStyle = "#ffaa00";
         ctx.fillText(`SCORE: ${g.score}`, GAME_WIDTH / 2, 260);
 
-        // High score categories
+        // High score categories — prefer cloud scores, fall back to local
         const hs = g.highScores;
+        const cs = g.cloudScores || {};
         const nr = g.newRecords || [];
         const categories = [
-          { label: "ALL-TIME", value: hs.allTime, key: "allTime" },
-          { label: "YEARLY",   value: hs.yearly.score, key: "yearly" },
-          { label: "MONTHLY",  value: hs.monthly.score, key: "monthly" },
-          { label: "WEEKLY",   value: hs.weekly.score, key: "weekly" },
-          { label: "DAILY",    value: hs.daily.score, key: "daily" },
+          { label: "ALL-TIME", value: Math.max(hs.allTime, cs.allTime || 0), key: "allTime" },
+          { label: "YEARLY",   value: Math.max(hs.yearly.score, cs.yearly || 0), key: "yearly" },
+          { label: "MONTHLY",  value: Math.max(hs.monthly.score, cs.monthly || 0), key: "monthly" },
+          { label: "WEEKLY",   value: Math.max(hs.weekly.score, cs.weekly || 0), key: "weekly" },
+          { label: "DAILY",    value: Math.max(hs.daily.score, cs.daily || 0), key: "daily" },
         ];
 
         const colX = [GAME_WIDTH / 2 - 130, GAME_WIDTH / 2 + 40];
@@ -875,7 +899,7 @@ export default function LavaDash() {
 
         ctx.font = "bold 12px 'Courier New', monospace";
         ctx.fillStyle = "#cc8844";
-        ctx.fillText(`BEST: ${g.highScores.allTime}`, 20, 52);
+        ctx.fillText(`BEST: ${Math.max(g.highScores.allTime, (g.cloudScores || {}).allTime || 0)}`, 20, 52);
 
         ctx.font = "bold 14px 'Courier New', monospace";
         ctx.fillStyle = "#ff6644";
