@@ -8,7 +8,7 @@
 
 ## Keys
 
-The anon key is a public, client-safe key. Security is enforced by Row Level Security (RLS) policies on the database, not by hiding the key. The key is embedded in `game/supabase.js` — see that file for the actual values.
+We use a Supabase **publishable key** (`sb_publishable_...`), which is client-safe and ships in the browser bundle. Security is enforced by Row Level Security (RLS) policies on the database, not by hiding the key. The key is embedded in `game/supabase.js` — see that file for the actual value. Legacy JWT anon keys have been disabled on this project.
 
 ## Client Setup
 
