@@ -95,6 +95,8 @@ export default function LavaDash() {
       g.spawnTowerFirst = true;
       g.blockTowerCount = 0;
       g.levelComplete = false;
+      g.winStarted = false;
+      g.winCountdown = 0;
       // Determine starting mode based on score thresholds
       const startThousand = Math.floor(startScore / 1000);
       let startMode = "cube";
@@ -102,7 +104,7 @@ export default function LavaDash() {
         // Sandbox always starts in ball mode
         startMode = "ball";
       } else if (startScore > 0) {
-        const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "ship", 7: "cube" };
+        const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "cube", 6: "ship", 7: "ball", 8: "cube", 9: "ball" };
         for (let t = 1; t <= startThousand; t++) {
           if (transitions[t]) startMode = transitions[t];
         }
@@ -350,6 +352,27 @@ export default function LavaDash() {
         }
 
         if (g.state === "playing") {
+        // Win countdown: freeze game, show 3-2-1 → GAME OVER → YOU WIN!
+        if (g.winStarted) {
+          g.winCountdown--;
+          const rem = g.winCountdown;
+          if (rem > 120) {
+            const secs = Math.ceil((rem - 120) / 60);
+            g.shipCountdownText = `${secs}`;
+          } else if (rem > 60) {
+            g.shipCountdownText = "GAME OVER";
+          } else if (rem > 0) {
+            g.shipCountdownText = "YOU WIN!";
+          } else {
+            g.state = "dead";
+            g.levelComplete = true;
+            g.deadTimer = 0;
+            handleDeath(g);
+            setDisplayState("dead");
+            g.shipCountdownText = "";
+          }
+          continue;
+        }
         // Update game
         g.distance += g.gameSpeed;
         g.groundOffset += g.gameSpeed;
@@ -367,15 +390,14 @@ export default function LavaDash() {
         g.score = Math.floor(g.distance / 10);
         setDisplayScore(g.score);
 
-        // Level complete at 10,000
+        // Start win sequence at 10,000
         if (g.score >= 10000) {
           g.score = 10000;
-          g.state = "dead";
-          g.levelComplete = true;
-          g.deadTimer = 0;
-          handleDeath(g);
+          g.winStarted = true;
+          g.winCountdown = 300;
+          g.obstacles = [];
           setDisplayScore(10000);
-          setDisplayState("dead");
+          continue;
         }
 
         // Physics
@@ -473,8 +495,11 @@ export default function LavaDash() {
             2: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
             3: { mode: "cube" },
             4: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
-            5: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
-            7: { mode: "cube" },
+            5: { mode: "cube" },
+            6: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
+            7: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
+            8: { mode: "cube" },
+            9: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
           }[currentThousand];
 
           if (transition) {
@@ -811,7 +836,7 @@ export default function LavaDash() {
         ctx.font = "bold 48px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = isWin ? "#44ff66" : "#ff3300";
-        ctx.fillText(isWin ? "LEVEL COMPLETE!" : "GAME OVER", GAME_WIDTH / 2, 130);
+        ctx.fillText(isWin ? "YOU WIN!" : "GAME OVER", GAME_WIDTH / 2, 130);
         ctx.shadowBlur = 0;
 
         drawMenuCubes(ctx, g.frameCount, c1, c2);
@@ -916,8 +941,10 @@ export default function LavaDash() {
           ctx.font = `bold ${size}px 'Courier New', monospace`;
           if (isFinalText) {
             const isBall = g.shipCountdownText === "ROLL!";
-            ctx.fillStyle = isBall ? "#44ff66" : "#ff4400";
-            ctx.shadowColor = isBall ? "#22dd44" : "#ff6600";
+            const isWin = g.shipCountdownText === "YOU WIN!";
+            const isGameOver = g.shipCountdownText === "GAME OVER";
+            ctx.fillStyle = isWin ? "#ffdd44" : isGameOver ? "#ff3300" : isBall ? "#44ff66" : "#ff4400";
+            ctx.shadowColor = isWin ? "#ff8800" : isGameOver ? "#ff0000" : isBall ? "#22dd44" : "#ff6600";
           } else {
             ctx.fillStyle = "#ffdd00";
             ctx.shadowColor = "#ff8800";
