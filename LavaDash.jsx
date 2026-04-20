@@ -583,10 +583,11 @@ export default function LavaDash() {
             if (g.nextObstacle < 230) g.nextObstacle = 230;
           }
           // Tag blocks with alternating tower index for green/red coloring
-          const hasBlock = newObs.some((o) => o.type === "block");
-          if (hasBlock) {
+          // (skip blocks that pre-specify a towerIdx, e.g. always-green staircase)
+          const needsTag = newObs.some((o) => o.type === "block" && o.towerIdx == null);
+          if (needsTag) {
             const idx = g.blockTowerCount++;
-            newObs.forEach((o) => { if (o.type === "block") o.towerIdx = idx; });
+            newObs.forEach((o) => { if (o.type === "block" && o.towerIdx == null) o.towerIdx = idx; });
           }
         }
 

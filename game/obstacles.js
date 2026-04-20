@@ -65,42 +65,42 @@ export function generateSandboxBallObstacle(x, onCeiling) {
   const bw = 36; // block width
 
   if (onCeiling) {
-    // 3-wide x 4-tall tower hanging from the ceiling
-    for (let col = 0; col < 3; col++) {
-      for (let row = 0; row < 4; row++) {
+    // 5-wide x 5-tall tower hanging from the ceiling
+    for (let col = 0; col < 5; col++) {
+      for (let row = 0; row < 5; row++) {
         obs.push({ type: "block", x: x + col * bw, y: SHIP_CEILING_Y + bw * row, w: bw, h: bw });
       }
     }
     // Spikes on bottom of the tower (pointing down)
-    for (let col = 0; col < 3; col++) {
-      obs.push({ type: "spike", x: x + col * bw + 3, y: SHIP_CEILING_Y + bw * 4, w: 30, h: 40, direction: "down" });
+    for (let col = 0; col < 5; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: SHIP_CEILING_Y + bw * 5, w: 30, h: 40, direction: "down" });
     }
     // Spikes on the left side (pointing left)
-    for (let row = 0; row < 4; row++) {
+    for (let row = 0; row < 5; row++) {
       obs.push({ type: "spike", x: x - 30, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "left" });
     }
     // Spikes on the right side (pointing right)
-    for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x + 3 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "right" });
+    for (let row = 0; row < 5; row++) {
+      obs.push({ type: "spike", x: x + 5 * bw, y: SHIP_CEILING_Y + bw * row + 3, w: 30, h: 30, direction: "right" });
     }
   } else {
-    // 3-wide x 4-tall tower on the ground
-    for (let col = 0; col < 3; col++) {
-      for (let row = 0; row < 4; row++) {
+    // 5-wide x 5-tall tower on the ground
+    for (let col = 0; col < 5; col++) {
+      for (let row = 0; row < 5; row++) {
         obs.push({ type: "block", x: x + col * bw, y: GROUND_Y - bw * (row + 1), w: bw, h: bw });
       }
     }
     // Spikes on top of the tower
-    for (let col = 0; col < 3; col++) {
-      obs.push({ type: "spike", x: x + col * bw + 3, y: GROUND_Y - bw * 4, w: 30, h: 40 });
+    for (let col = 0; col < 5; col++) {
+      obs.push({ type: "spike", x: x + col * bw + 3, y: GROUND_Y - bw * 5, w: 30, h: 40 });
     }
     // Spikes on the left side (pointing left)
-    for (let row = 0; row < 4; row++) {
+    for (let row = 0; row < 5; row++) {
       obs.push({ type: "spike", x: x - 30, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "left" });
     }
     // Spikes on the right side (pointing right)
-    for (let row = 0; row < 4; row++) {
-      obs.push({ type: "spike", x: x + 3 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "right" });
+    for (let row = 0; row < 5; row++) {
+      obs.push({ type: "spike", x: x + 5 * bw, y: GROUND_Y - bw * (row + 1) + 3, w: 30, h: 30, direction: "right" });
     }
   }
   return obs;
@@ -196,13 +196,13 @@ export function generateObstacle(x, level) {
       { type: "orb", subtype: "yellow", x: x + 80, y: GROUND_Y - 130, w: 28, h: 28, activated: false },
       { type: "orb", subtype: "pink", x: x + 160, y: GROUND_Y - 80, w: 28, h: 28, activated: false },
     ],
-    // 3-step staircase with spikes in gaps
+    // 3-step staircase (green blocks) with spikes in gaps
     [
-      { type: "block", x, y: GROUND_Y - 36, w: 36, h: 36 },
+      { type: "block", x, y: GROUND_Y - 36, w: 36, h: 36, towerIdx: 0 },
       { type: "spike", x: x + 50, y: GROUND_Y, w: 30, h: 40 },
-      { type: "block", x: x + 90, y: GROUND_Y - 72, w: 36, h: 72 },
+      { type: "block", x: x + 90, y: GROUND_Y - 72, w: 36, h: 72, towerIdx: 0 },
       { type: "spike", x: x + 140, y: GROUND_Y, w: 30, h: 40 },
-      { type: "block", x: x + 180, y: GROUND_Y - 108, w: 36, h: 108 },
+      { type: "block", x: x + 180, y: GROUND_Y - 108, w: 36, h: 108, towerIdx: 0 },
     ],
   ];
   const maxIdx = Math.min(patterns.length, 2 + Math.floor(level / 3));
