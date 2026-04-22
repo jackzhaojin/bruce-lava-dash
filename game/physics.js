@@ -184,7 +184,7 @@ export function checkBoosts(player, obstacles, g) {
       if (cfg) {
         player.vy = cfg.vy;
         player.grounded = false;
-        player.invincible = Math.max(player.invincible, 60); // 1 second of safety after pad/orb
+        player.invincible = Math.max(player.invincible, 90); // 1.5 seconds of safety after pad/orb
         playSound("boost");
         const pColor = cfg.color;
         g.particles.push(...createParticles(
@@ -215,7 +215,7 @@ export function killPlayer(g, player) {
 export function revivePlayer(g, deadPlayer, alivePlayer) {
   deadPlayer.alive = true;
   deadPlayer.ghostTimer = 0;
-  deadPlayer.invincible = 90; // 1.5 seconds of invincibility after revive
+  deadPlayer.invincible = 135; // 2.25 seconds of invincibility after revive
   deadPlayer.vy = 0;
   deadPlayer.grounded = true;
   deadPlayer.rotation = 0;
