@@ -6,7 +6,7 @@ import {
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores, fetchHighScores, submitScore } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower, generateShipObstacle, generateUfoObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
 import { updatePlayer, updateShipPlayer, updateBallPlayer, updateUfoPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
@@ -623,8 +623,10 @@ export default function LavaDash() {
             g.obstacles.push(...newObs);
             g.nextObstacle = 700;
           } else if (g.towerAt2000) {
-            // Ship mode: continuous ground/ceiling spikes + towers
-            newObs = generateShipObstacle(GAME_WIDTH + 50);
+            // Ship/UFO mode: ground/ceiling spikes (UFO is spike-only, ship adds towers)
+            newObs = g.currentMode === "ufo"
+              ? generateUfoObstacle(GAME_WIDTH + 50)
+              : generateShipObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
             g.nextObstacle = 280;
           } else if (g.currentMode === "ball") {
