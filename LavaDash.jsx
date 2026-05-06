@@ -560,6 +560,14 @@ export default function LavaDash() {
               g.countdownSubtitle = transition.subtitle;
               g.countdownTargetMode = transition.mode;
               g.nextObstacle = 800;
+              // Clear ship/UFO obstacles when ball mode is incoming; keep ground 3-block towers + their top spike
+              if (transition.mode === "ball") {
+                g.obstacles = g.obstacles.filter((o) => {
+                  if (o.type === "spike" && o.direction === "down") return false;
+                  if (o.type === "spike" && o.y >= GROUND_Y) return false;
+                  return true;
+                });
+              }
             } else {
               g.currentMode = "cube";
               g.towerAt2000 = false;
