@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   GAME_WIDTH, GAME_HEIGHT, GROUND_Y, CUBE_SIZE,
   JUMP_FORCE, GAME_SPEED_BASE, DEAD_COOLDOWN, REVIVE_FRAMES,
-  COLOR_PRESETS, SHIP_FLY_FORCE, SHIP_CEILING_Y, BALL_FLIP_FORCE,
+  COLOR_PRESETS, SHIP_FLY_FORCE, SHIP_CEILING_Y, BALL_FLIP_FORCE, UFO_JUMP_FORCE,
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores, fetchHighScores, submitScore } from "./game/highScores.js";
 import { playSound } from "./game/audio.js";
-import { generateObstacle, generateBlockTower, generateShipObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
+import { generateObstacle, generateBlockTower, generateShipObstacle, generateUfoObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
-import { updatePlayer, updateShipPlayer, updateBallPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
+import { updatePlayer, updateShipPlayer, updateBallPlayer, updateUfoPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
 import {
   drawVolcano, drawSpike, drawBlock, drawPad, drawOrb,
-  drawCube, drawShip, drawBall, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
+  drawCube, drawShip, drawBall, drawUfo, drawGhostCountdown, drawMenuCubes, drawPlayerStatus,
   drawTouchZoneDivider,
 } from "./game/renderer.js";
 import {
@@ -100,26 +100,28 @@ export default function LavaDash() {
       // Determine starting mode based on score thresholds
       const startThousand = Math.floor(startScore / 1000);
       let startMode = "cube";
-      if (sandboxStart) {
-        // Sandbox always starts in ball mode
-        startMode = "ball";
-      } else if (startScore > 0) {
-        const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "cube", 6: "ship", 7: "ball", 8: "cube", 9: "ball" };
+      if (startScore > 0) {
+        const transitions = { 2: "ship", 3: "cube", 4: "ball", 5: "cube", 6: "ship", 7: "ball", 8: "ufo", 9: "ball" };
         for (let t = 1; t <= startThousand; t++) {
           if (transitions[t]) startMode = transitions[t];
         }
       }
       g.currentMode = startMode;
-      g.towerAt2000 = startMode === "ship";
+      g.towerAt2000 = startMode === "ship" || startMode === "ufo";
       g.lastModeThousand = startThousand;
       g.shipCountdown = 0;
       g.shipCountdownText = "";
+      g.bothPrevHeld = false;
       g.p1.shipMode = startMode === "ship";
       g.p1.ballMode = startMode === "ball";
+      g.p1.ufoMode = startMode === "ufo";
+      g.p1.prevJumpHeld = false;
       g.p1.gravityFlipped = false;
       if (g.playerMode === 2) {
         g.p2.shipMode = startMode === "ship";
         g.p2.ballMode = startMode === "ball";
+        g.p2.ufoMode = startMode === "ufo";
+        g.p2.prevJumpHeld = false;
         g.p2.gravityFlipped = false;
       }
       // In sandbox, delay first obstacle by 250 score (2500 distance)
@@ -202,8 +204,13 @@ export default function LavaDash() {
     let fpsDisplay = 0;
     let stepsDisplay = 0;
 
-    // Handle death: update local scores, submit to cloud only if a new record
+    // Handle death: update local scores, submit to cloud only if a new record.
+    // Sandbox runs are practice — never persist their scores anywhere.
     function handleDeath(g) {
+      if (g.sandboxMode) {
+        g.newRecords = [];
+        return;
+      }
       const result = updateHighScores(g.score);
       g.highScores = result.scores;
       g.newRecords = result.newRecords;
@@ -278,8 +285,8 @@ export default function LavaDash() {
         drawVolcano(ctx, 700, 150, 80);
       }
 
-      // Lava ground (different color per mode)
-      const inShipMode = g.currentMode === "ship";
+      // Lava ground (different color per mode — UFO reuses ship visuals)
+      const inShipMode = g.currentMode === "ship" || g.currentMode === "ufo";
       const inBallMode = g.currentMode === "ball";
       ctx.fillStyle = inShipMode ? lavaGradShip : inBallMode ? lavaGradBall : lavaGradCube;
       ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
@@ -383,8 +390,8 @@ export default function LavaDash() {
         g.level = 1 + Math.floor(g.distance / 2000);
         const rawSpeed = GAME_SPEED_BASE + g.level * 0.3;
         g.gameSpeed = Math.min(rawSpeed, 7.5);
-        // Slow down during ship/ball mode
-        if (g.currentMode === "ship" || g.currentMode === "ball") g.gameSpeed *= 0.75;
+        // Slow down during ship/ball/ufo mode
+        if (g.currentMode === "ship" || g.currentMode === "ball" || g.currentMode === "ufo") g.gameSpeed *= 0.75;
 
         // Score
         g.score = Math.floor(g.distance / 10);
@@ -403,10 +410,12 @@ export default function LavaDash() {
         // Physics
         if (g.p1.shipMode) updateShipPlayer(g.p1, g.obstacles);
         else if (g.p1.ballMode) updateBallPlayer(g.p1);
+        else if (g.p1.ufoMode) updateUfoPlayer(g.p1, g.obstacles);
         else updatePlayer(g.p1, g.obstacles);
         if (g.playerMode === 2) {
           if (g.p2.shipMode) updateShipPlayer(g.p2, g.obstacles);
           else if (g.p2.ballMode) updateBallPlayer(g.p2);
+          else if (g.p2.ufoMode) updateUfoPlayer(g.p2, g.obstacles);
           else updatePlayer(g.p2, g.obstacles);
         }
 
@@ -429,6 +438,14 @@ export default function LavaDash() {
               g.p1.grounded = false;
               playSound("jump");
             }
+          } else if (g.p1.ufoMode && g.p1.alive) {
+            // UFO mode: each tap = jump (unlimited mid-air jumps)
+            if (p1Held && !g.p1.prevJumpHeld) {
+              g.p1.vy = UFO_JUMP_FORCE;
+              g.p1.grounded = false;
+              playSound("jump");
+            }
+            g.p1.prevJumpHeld = p1Held;
           } else if (p1Held && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
@@ -438,52 +455,86 @@ export default function LavaDash() {
           let jumped = false;
           const p1Held = held.shiftLeft || touch.p1Held;
           const p2Held = held.shiftRight || touch.p2Held;
+          const bothHeld = held.space || mHeld;
 
-          // P1 input
+          // P1 input — shift/own-touch only (UFO multi-jump on press edge)
           if (g.p1.shipMode && g.p1.alive) {
-            if (p1Held || held.space || mHeld) g.p1.vy += SHIP_FLY_FORCE;
+            if (p1Held || bothHeld) g.p1.vy += SHIP_FLY_FORCE;
           } else if (g.p1.ballMode && g.p1.alive) {
-            if ((p1Held || held.space || mHeld) && g.p1.grounded) {
+            if ((p1Held || bothHeld) && g.p1.grounded) {
               g.p1.gravityFlipped = !g.p1.gravityFlipped;
               g.p1.vy = g.p1.gravityFlipped ? -BALL_FLIP_FORCE : BALL_FLIP_FORCE;
               g.p1.grounded = false;
               jumped = true;
             }
+          } else if (g.p1.ufoMode && g.p1.alive) {
+            if (p1Held && !g.p1.prevJumpHeld) {
+              g.p1.vy = UFO_JUMP_FORCE;
+              g.p1.grounded = false;
+              jumped = true;
+            }
+            g.p1.prevJumpHeld = p1Held;
           } else if ((p1Held) && g.p1.grounded && g.p1.alive) {
             g.p1.vy = JUMP_FORCE;
             g.p1.grounded = false;
             jumped = true;
           }
 
-          // P2 input
+          // P2 input — shift/own-touch only (UFO multi-jump on press edge)
           if (g.p2.shipMode && g.p2.alive) {
-            if (p2Held || held.space || mHeld) g.p2.vy += SHIP_FLY_FORCE;
+            if (p2Held || bothHeld) g.p2.vy += SHIP_FLY_FORCE;
           } else if (g.p2.ballMode && g.p2.alive) {
-            if ((p2Held || held.space || mHeld) && g.p2.grounded) {
+            if ((p2Held || bothHeld) && g.p2.grounded) {
               g.p2.gravityFlipped = !g.p2.gravityFlipped;
               g.p2.vy = g.p2.gravityFlipped ? -BALL_FLIP_FORCE : BALL_FLIP_FORCE;
               g.p2.grounded = false;
               jumped = true;
             }
+          } else if (g.p2.ufoMode && g.p2.alive) {
+            if (p2Held && !g.p2.prevJumpHeld) {
+              g.p2.vy = UFO_JUMP_FORCE;
+              g.p2.grounded = false;
+              jumped = true;
+            }
+            g.p2.prevJumpHeld = p2Held;
           } else if ((p2Held) && g.p2.grounded && g.p2.alive) {
             g.p2.vy = JUMP_FORCE;
             g.p2.grounded = false;
             jumped = true;
           }
 
-          // Space/mouse still jumps both (backward compatible, cube mode only)
-          if ((held.space || mHeld) && !g.p1.shipMode && !g.p1.ballMode) {
-            if (g.p1.grounded && g.p1.alive) {
-              g.p1.vy = JUMP_FORCE;
-              g.p1.grounded = false;
-              jumped = true;
+          // Space/mouse jumps BOTH players (cube + UFO; UFO uses press edge)
+          if (bothHeld && !g.p1.shipMode && !g.p1.ballMode) {
+            const isUfo = g.p1.ufoMode;
+            const bothEdge = !g.bothPrevHeld;
+            if (g.p1.alive) {
+              if (isUfo) {
+                if (bothEdge) {
+                  g.p1.vy = UFO_JUMP_FORCE;
+                  g.p1.grounded = false;
+                  jumped = true;
+                }
+              } else if (g.p1.grounded) {
+                g.p1.vy = JUMP_FORCE;
+                g.p1.grounded = false;
+                jumped = true;
+              }
             }
-            if (g.p2.grounded && g.p2.alive) {
-              g.p2.vy = JUMP_FORCE;
-              g.p2.grounded = false;
-              jumped = true;
+            if (g.p2.alive) {
+              if (isUfo) {
+                if (bothEdge) {
+                  g.p2.vy = UFO_JUMP_FORCE;
+                  g.p2.grounded = false;
+                  jumped = true;
+                }
+              } else if (g.p2.grounded) {
+                g.p2.vy = JUMP_FORCE;
+                g.p2.grounded = false;
+                jumped = true;
+              }
             }
           }
+          g.bothPrevHeld = bothHeld;
           if (jumped) playSound("jump");
         }
 
@@ -498,7 +549,7 @@ export default function LavaDash() {
             5: { mode: "cube" },
             6: { mode: "ship", countdown: true, text: "BLAST OFF!", subtitle: "SHIP MODE INCOMING!" },
             7: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
-            8: { mode: "cube" },
+            8: { mode: "ufo", countdown: true, text: "BEAM UP!", subtitle: "UFO MODE INCOMING!" },
             9: { mode: "ball", countdown: true, text: "ROLL!", subtitle: "BALL MODE INCOMING!" },
           }[currentThousand];
 
@@ -509,15 +560,25 @@ export default function LavaDash() {
               g.countdownSubtitle = transition.subtitle;
               g.countdownTargetMode = transition.mode;
               g.nextObstacle = 800;
+              // Clear ship/UFO obstacles when ball mode is incoming; keep ground 3-block towers + their top spike
+              if (transition.mode === "ball") {
+                g.obstacles = g.obstacles.filter((o) => {
+                  if (o.type === "spike" && o.direction === "down") return false;
+                  if (o.type === "spike" && o.y >= GROUND_Y) return false;
+                  return true;
+                });
+              }
             } else {
               g.currentMode = "cube";
               g.towerAt2000 = false;
               g.p1.shipMode = false;
               g.p1.ballMode = false;
+              g.p1.ufoMode = false;
               g.p1.gravityFlipped = false;
               if (g.playerMode === 2) {
                 g.p2.shipMode = false;
                 g.p2.ballMode = false;
+                g.p2.ufoMode = false;
                 g.p2.gravityFlipped = false;
               }
               g.obstacles = [];
@@ -536,13 +597,17 @@ export default function LavaDash() {
             // Switch to target mode
             const targetMode = g.countdownTargetMode || "ship";
             g.currentMode = targetMode;
-            g.towerAt2000 = targetMode === "ship";
+            g.towerAt2000 = targetMode === "ship" || targetMode === "ufo";
             g.p1.shipMode = targetMode === "ship";
             g.p1.ballMode = targetMode === "ball";
+            g.p1.ufoMode = targetMode === "ufo";
+            g.p1.prevJumpHeld = false;
             g.p1.gravityFlipped = false;
             if (g.playerMode === 2) {
               g.p2.shipMode = targetMode === "ship";
               g.p2.ballMode = targetMode === "ball";
+              g.p2.ufoMode = targetMode === "ufo";
+              g.p2.prevJumpHeld = false;
               g.p2.gravityFlipped = false;
             }
             g.nextObstacle = 400;
@@ -566,8 +631,10 @@ export default function LavaDash() {
             g.obstacles.push(...newObs);
             g.nextObstacle = 700;
           } else if (g.towerAt2000) {
-            // Ship mode: continuous ground/ceiling spikes + towers
-            newObs = generateShipObstacle(GAME_WIDTH + 50);
+            // Ship/UFO mode: ground/ceiling spikes (UFO is spike-only, ship adds towers)
+            newObs = g.currentMode === "ufo"
+              ? generateUfoObstacle(GAME_WIDTH + 50)
+              : generateShipObstacle(GAME_WIDTH + 50);
             g.obstacles.push(...newObs);
             g.nextObstacle = 280;
           } else if (g.currentMode === "ball") {
@@ -674,6 +741,7 @@ export default function LavaDash() {
         const drawP = (player, ghost, fc, col) =>
           player.shipMode ? drawShip(ctx, player, ghost, fc, col)
           : player.ballMode ? drawBall(ctx, player, ghost, fc, col)
+          : player.ufoMode ? drawUfo(ctx, player, ghost, fc, col)
           : drawCube(ctx, player, ghost, fc, col);
 
         if (g.p1.alive) {
@@ -942,10 +1010,11 @@ export default function LavaDash() {
           ctx.font = `bold ${size}px 'Courier New', monospace`;
           if (isFinalText) {
             const isBall = g.shipCountdownText === "ROLL!";
+            const isUfo = g.shipCountdownText === "BEAM UP!";
             const isWin = g.shipCountdownText === "YOU WIN!";
             const isGameOver = g.shipCountdownText === "GAME OVER";
-            ctx.fillStyle = isWin ? "#ffdd44" : isGameOver ? "#ff3300" : isBall ? "#44ff66" : "#ff4400";
-            ctx.shadowColor = isWin ? "#ff8800" : isGameOver ? "#ff0000" : isBall ? "#22dd44" : "#ff6600";
+            ctx.fillStyle = isWin ? "#ffdd44" : isGameOver ? "#ff3300" : isBall ? "#44ff66" : isUfo ? "#cc66ff" : "#ff4400";
+            ctx.shadowColor = isWin ? "#ff8800" : isGameOver ? "#ff0000" : isBall ? "#22dd44" : isUfo ? "#8800ff" : "#ff6600";
           } else {
             ctx.fillStyle = "#ffdd00";
             ctx.shadowColor = "#ff8800";
@@ -1138,7 +1207,7 @@ export default function LavaDash() {
         {/* Sandbox toggle */}
         <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <button
-            onClick={() => setSandboxStart(sandboxStart ? null : 4000)}
+            onClick={() => setSandboxStart(sandboxStart ? null : 8000)}
             style={{
               background: sandboxStart
                 ? "linear-gradient(180deg, #44cc44, #228822)"
@@ -1161,11 +1230,11 @@ export default function LavaDash() {
               e.target.style.transform = "scale(1)";
             }}
           >
-            {sandboxStart ? "\u2705 SANDBOX: START @ 4000" : "\u{1F9EA} SANDBOX MODE"}
+            {sandboxStart ? "\u2705 SANDBOX: START @ 8000" : "\u{1F9EA} SANDBOX MODE"}
           </button>
           {sandboxStart && (
             <div style={{ color: "#66ff66", fontSize: 11, marginTop: 6, letterSpacing: 1 }}>
-              Starts in Ball Mode — pick 1P or 2P above
+              Starts in UFO Mode — pick 1P or 2P above
             </div>
           )}
         </div>

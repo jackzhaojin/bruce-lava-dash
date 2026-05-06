@@ -25,6 +25,8 @@ export function createPlayer(x, id) {
     ghostTimer: 0,
     shipMode: false,
     ballMode: false,
+    ufoMode: false,
+    prevJumpHeld: false,
     gravityFlipped: false,
     invincible: 0,
   };

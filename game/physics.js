@@ -1,4 +1,4 @@
-import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES, SHIP_GRAVITY, SHIP_MAX_VY, SHIP_CEILING_Y, BALL_GRAVITY } from "./constants.js";
+import { GRAVITY, GROUND_Y, CUBE_SIZE, GAME_WIDTH, PAD_TYPES, ORB_TYPES, SHIP_GRAVITY, SHIP_MAX_VY, SHIP_CEILING_Y, BALL_GRAVITY, UFO_GRAVITY } from "./constants.js";
 import { playSound } from "./audio.js";
 import { createParticles } from "./entities.js";
 
@@ -82,6 +82,52 @@ export function updateShipPlayer(player, obstacles) {
   // Smooth tilt based on vertical velocity
   const targetRotation = player.vy * 0.05;
   player.rotation += (targetRotation - player.rotation) * 0.15;
+}
+
+export function updateUfoPlayer(player, obstacles) {
+  player.vy += UFO_GRAVITY;
+  player.y += player.vy;
+
+  // Land on green block tops
+  if (player.alive && player.vy >= 0 && obstacles) {
+    const prevBottom = player.y - player.vy + CUBE_SIZE;
+    const currBottom = player.y + CUBE_SIZE;
+    const cubeL = player.x + 6;
+    const cubeR = player.x + CUBE_SIZE - 6;
+    for (const o of obstacles) {
+      if (o.type !== "block") continue;
+      const isRed = o.towerIdx != null && o.towerIdx % 2 === 1;
+      if (isRed) continue;
+      if (cubeR > o.x + 3 && cubeL < o.x + o.w - 3 &&
+          prevBottom <= o.y + 6 && currBottom >= o.y) {
+        player.y = o.y - CUBE_SIZE;
+        player.vy = 0;
+        player.grounded = true;
+        break;
+      }
+    }
+  }
+
+  // Ceiling clamp
+  if (player.y < SHIP_CEILING_Y) {
+    player.y = SHIP_CEILING_Y;
+    player.vy = 0;
+  }
+  // Ground clamp
+  if (player.y >= GROUND_Y - CUBE_SIZE) {
+    player.y = GROUND_Y - CUBE_SIZE;
+    player.vy = 0;
+    player.grounded = true;
+  } else if (player.vy !== 0) {
+    player.grounded = false;
+  }
+
+  // Cube-style rotation: spin in air, snap on ground
+  if (!player.grounded) {
+    player.rotation += 0.08;
+  } else {
+    player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+  }
 }
 
 export function updateBallPlayer(player) {
@@ -222,6 +268,8 @@ export function revivePlayer(g, deadPlayer, alivePlayer) {
   // Revive in current mode
   deadPlayer.shipMode = g.currentMode === "ship";
   deadPlayer.ballMode = g.currentMode === "ball";
+  deadPlayer.ufoMode = g.currentMode === "ufo";
+  deadPlayer.prevJumpHeld = false;
   deadPlayer.gravityFlipped = false;
   if (alivePlayer && alivePlayer.alive) {
     deadPlayer.x = alivePlayer.x + (deadPlayer.id === 1 ? -70 : 70);

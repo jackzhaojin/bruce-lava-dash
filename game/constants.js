@@ -19,6 +19,10 @@ export const SHIP_CEILING_Y = 20;
 export const BALL_GRAVITY = 0.5;
 export const BALL_FLIP_FORCE = 10;
 
+// UFO mode (activates at score 8000) — gentle gravity + small bumps, multi-tap to climb
+export const UFO_GRAVITY = 0.3;
+export const UFO_JUMP_FORCE = -7;
+
 const _COLOR_PRESETS = [
   { name: "Orange", gradStart: "#ffaa00", gradEnd: "#ff6600", glow: "#ff8800", border: "#ffcc44" },
   { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },

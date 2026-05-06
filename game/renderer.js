@@ -272,6 +272,70 @@ export function drawShip(ctx, player, isGhost, frameCount, colorObj) {
   ctx.restore();
 }
 
+export function drawUfo(ctx, player, isGhost, frameCount, colorObj) {
+  const isP1 = player.id === 1;
+  const gradStart = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");
+  const gradEnd = colorObj ? colorObj.gradEnd : (isP1 ? "#ff6600" : "#0066ff");
+  const glowColor = colorObj ? colorObj.glow : (isP1 ? "#ff8800" : "#0088ff");
+  const borderColor = colorObj ? colorObj.border : (isP1 ? "#ffcc44" : "#66ddff");
+
+  ctx.save();
+  if (isGhost) ctx.globalAlpha = 0.35;
+
+  const cx = player.x + CUBE_SIZE / 2;
+  const cy = player.y + CUBE_SIZE / 2;
+  const rx = CUBE_SIZE * 0.6;
+  const ry = CUBE_SIZE * 0.22;
+
+  ctx.translate(cx, cy);
+  const wobble = Math.sin(frameCount * 0.12) * 0.06;
+  ctx.rotate(player.rotation + wobble);
+
+  // Glow underneath
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 15 * shadow;
+
+  // Saucer body (ellipse)
+  const bodyGrad = ctx.createLinearGradient(0, -ry, 0, ry);
+  bodyGrad.addColorStop(0, gradStart);
+  bodyGrad.addColorStop(1, gradEnd);
+  ctx.beginPath();
+  ctx.ellipse(0, 4, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Dome on top
+  ctx.beginPath();
+  ctx.ellipse(0, 2, rx * 0.5, ry * 1.6, 0, Math.PI, 0, false);
+  ctx.fillStyle = "rgba(200,240,255,0.7)";
+  ctx.fill();
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Pilot dot inside dome
+  ctx.fillStyle = "#222";
+  ctx.beginPath();
+  ctx.arc(0, -1, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Flashing lights underneath
+  for (let i = 0; i < 3; i++) {
+    const lx = -rx * 0.55 + i * (rx * 0.55);
+    ctx.beginPath();
+    ctx.arc(lx, ry + 4, 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = (frameCount + i * 5) % 18 < 9 ? "#ffff66" : "#ff66ff";
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 export function drawBall(ctx, player, isGhost, frameCount, colorObj) {
   const isP1 = player.id === 1;
   const gradStart = colorObj ? colorObj.gradStart : (isP1 ? "#ffaa00" : "#00ccff");

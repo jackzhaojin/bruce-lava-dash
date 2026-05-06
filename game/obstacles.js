@@ -20,6 +20,34 @@ export function generateBlockTower(x) {
   ];
 }
 
+export function generateUfoObstacle(x) {
+  const obs = [];
+  const roll = Math.random();
+
+  if (roll < 0.35) {
+    // Ground spikes only — tap to jump over
+    const numSpikes = 5;
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * 40, y: GROUND_Y, w: 30, h: 40 });
+    }
+  } else if (roll < 0.7) {
+    // Ceiling spikes only — stay low
+    const numSpikes = 5;
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * 40, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+    }
+  } else {
+    // Ground & ceiling — squeeze through the middle
+    const numSpikes = 6;
+    for (let i = 0; i < numSpikes; i++) {
+      obs.push({ type: "spike", x: x + i * 40, y: GROUND_Y, w: 30, h: 40 });
+      obs.push({ type: "spike", x: x + i * 40, y: SHIP_CEILING_Y, w: 30, h: 40, direction: "down" });
+    }
+  }
+
+  return obs;
+}
+
 export function generateShipObstacle(x) {
   const obs = [];
   const roll = Math.random();
