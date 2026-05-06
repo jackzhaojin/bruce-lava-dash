@@ -207,9 +207,11 @@ export function checkBoosts(player, obstacles, g) {
   const cubeR = player.x + CUBE_SIZE - 4;
   const cubeT = player.y + 4;
   const cubeB = player.y + CUBE_SIZE - 2;
+  const usedKey = player.id === 1 ? "usedByP1" : "usedByP2";
 
   for (const o of obstacles) {
-    if ((o.type !== "pad" && o.type !== "orb") || o.activated) continue;
+    if (o.type !== "pad" && o.type !== "orb") continue;
+    if (o[usedKey]) continue;
 
     let oL, oR, oT, oB;
     if (o.type === "pad") {
@@ -225,7 +227,9 @@ export function checkBoosts(player, obstacles, g) {
     }
 
     if (cubeR > oL && cubeL < oR && cubeB > oT && cubeT < oB) {
-      o.activated = true;
+      o[usedKey] = true;
+      // Visually dim once every active player has used it (preserves 1P feedback)
+      if (g.playerMode === 1 || (o.usedByP1 && o.usedByP2)) o.activated = true;
       const cfg = o.type === "pad" ? PAD_TYPES[o.subtype] : ORB_TYPES[o.subtype];
       if (cfg) {
         player.vy = cfg.vy;
