@@ -28,6 +28,7 @@ const _COLOR_PRESETS = [
   { name: "Blue",   gradStart: "#00ccff", gradEnd: "#0066ff", glow: "#0088ff", border: "#66ddff" },
   { name: "Green",  gradStart: "#44ff66", gradEnd: "#00aa22", glow: "#22dd44", border: "#88ff99" },
   { name: "Purple", gradStart: "#cc66ff", gradEnd: "#7722cc", glow: "#aa44ff", border: "#dd99ff" },
+  { name: "Indigo", gradStart: "#7788ff", gradEnd: "#3322bb", glow: "#5566ff", border: "#aabbff" },
   { name: "Pink",   gradStart: "#ff66aa", gradEnd: "#cc2266", glow: "#ff4488", border: "#ff99cc" },
   { name: "Red",    gradStart: "#ff4444", gradEnd: "#cc0000", glow: "#ff2222", border: "#ff8888" },
   { name: "Yellow", gradStart: "#ffee44", gradEnd: "#ccaa00", glow: "#ffdd00", border: "#ffff88" },
