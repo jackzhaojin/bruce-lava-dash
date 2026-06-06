@@ -8,6 +8,25 @@ import { isTouchDevice } from "./input.js";
 // Disable or reduce it on touch devices for performance.
 const shadow = isTouchDevice ? 0 : 1; // multiplier: 0 on mobile, 1 on desktop
 
+// Gradient cache — creating CanvasGradients every frame (per obstacle, per
+// player) churns garbage and triggers intermittent GC pauses. Entity gradients
+// are defined in translated local space so position doesn't invalidate them.
+// Keyed per-context so a remounted canvas gets a fresh cache.
+const gradientCaches = new WeakMap();
+function getGradient(ctx, key, make) {
+  let cache = gradientCaches.get(ctx);
+  if (!cache) {
+    cache = new Map();
+    gradientCaches.set(ctx, cache);
+  }
+  let grad = cache.get(key);
+  if (!grad) {
+    grad = make();
+    cache.set(key, grad);
+  }
+  return grad;
+}
+
 export function drawVolcano(ctx, x, w, h) {
   const baseY = GROUND_Y + 30;
   ctx.beginPath();
@@ -18,60 +37,74 @@ export function drawVolcano(ctx, x, w, h) {
   ctx.lineTo(x + w * 0.65, baseY - h);
   ctx.lineTo(x + w, baseY);
   ctx.closePath();
-  const grad = ctx.createLinearGradient(x, baseY - h, x, baseY);
-  grad.addColorStop(0, "#5a1a00");
-  grad.addColorStop(0.5, "#3d1200");
-  grad.addColorStop(1, "#2a0a00");
-  ctx.fillStyle = grad;
+  ctx.fillStyle = getGradient(ctx, `volcano|${x}|${w}|${h}`, () => {
+    const grad = ctx.createLinearGradient(x, baseY - h, x, baseY);
+    grad.addColorStop(0, "#5a1a00");
+    grad.addColorStop(0.5, "#3d1200");
+    grad.addColorStop(1, "#2a0a00");
+    return grad;
+  });
   ctx.fill();
 
   ctx.beginPath();
   ctx.arc(x + w * 0.5, baseY - h + 8, 12, 0, Math.PI * 2);
-  const glowGrad = ctx.createRadialGradient(x + w * 0.5, baseY - h + 8, 0, x + w * 0.5, baseY - h + 8, 20);
-  glowGrad.addColorStop(0, "rgba(255,100,0,0.8)");
-  glowGrad.addColorStop(1, "rgba(255,50,0,0)");
-  ctx.fillStyle = glowGrad;
+  ctx.fillStyle = getGradient(ctx, `volcanoGlow|${x}|${w}|${h}`, () => {
+    const glowGrad = ctx.createRadialGradient(x + w * 0.5, baseY - h + 8, 0, x + w * 0.5, baseY - h + 8, 20);
+    glowGrad.addColorStop(0, "rgba(255,100,0,0.8)");
+    glowGrad.addColorStop(1, "rgba(255,50,0,0)");
+    return glowGrad;
+  });
   ctx.fill();
 }
 
 export function drawSpike(ctx, x, y, w, h, direction) {
+  // Draw in local space (translate to x,y) so the gradient is
+  // position-independent and can be cached instead of rebuilt every frame.
+  ctx.save();
+  ctx.translate(x, y);
   ctx.beginPath();
   if (direction === "down") {
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w / 2, y + h);
-    ctx.lineTo(x + w, y);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w / 2, h);
+    ctx.lineTo(w, 0);
   } else if (direction === "left") {
     // Points left: base on right, tip on left
-    ctx.moveTo(x + w, y);
-    ctx.lineTo(x, y + h / 2);
-    ctx.lineTo(x + w, y + h);
+    ctx.moveTo(w, 0);
+    ctx.lineTo(0, h / 2);
+    ctx.lineTo(w, h);
   } else if (direction === "right") {
     // Points right: base on left, tip on right
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y + h / 2);
-    ctx.lineTo(x, y + h);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w, h / 2);
+    ctx.lineTo(0, h);
   } else {
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w / 2, y - h);
-    ctx.lineTo(x + w, y);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w / 2, -h);
+    ctx.lineTo(w, 0);
   }
   ctx.closePath();
-  let tipX = x + w / 2, tipY = direction === "down" ? y + h : y - h;
-  if (direction === "left") { tipX = x; tipY = y + h / 2; }
-  else if (direction === "right") { tipX = x + w; tipY = y + h / 2; }
-  const grad = ctx.createLinearGradient(x, y, tipX, tipY);
-  grad.addColorStop(0, "#dddddd");
-  grad.addColorStop(1, "#ffffff");
-  ctx.fillStyle = grad;
+  ctx.fillStyle = getGradient(ctx, `spike|${w}|${h}|${direction || "up"}`, () => {
+    let tipX = w / 2, tipY = direction === "down" ? h : -h;
+    if (direction === "left") { tipX = 0; tipY = h / 2; }
+    else if (direction === "right") { tipX = w; tipY = h / 2; }
+    const grad = ctx.createLinearGradient(0, 0, tipX, tipY);
+    grad.addColorStop(0, "#dddddd");
+    grad.addColorStop(1, "#ffffff");
+    return grad;
+  });
   ctx.fill();
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.shadowColor = "#aaccff";
-  ctx.shadowBlur = 8 * shadow;
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  // Glow pass — pure overdraw when shadows are disabled (mobile), so skip it
+  if (shadow) {
+    ctx.shadowColor = "#aaccff";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
 }
 
 export function drawBlock(ctx, x, y, w, h, towerIdx) {
@@ -92,11 +125,14 @@ export function drawBlock(ctx, x, y, w, h, towerIdx) {
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
 
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 6 * shadow;
-  ctx.strokeStyle = stroke;
-  ctx.strokeRect(x, y, w, h);
-  ctx.shadowBlur = 0;
+  // Glow pass — pure overdraw when shadows are disabled (mobile), so skip it
+  if (shadow) {
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = stroke;
+    ctx.strokeRect(x, y, w, h);
+    ctx.shadowBlur = 0;
+  }
 }
 
 export function drawPad(ctx, o, frameCount) {
@@ -137,13 +173,15 @@ export function drawOrb(ctx, o, frameCount) {
   const cy = o.y + o.h / 2;
   const r = o.w / 2;
 
+  // Local space so the radial gradient can be cached (orbs move every frame)
   ctx.save();
+  ctx.translate(cx, cy);
   if (o.activated) ctx.globalAlpha = 0.25;
 
   if (!o.activated) {
     const pulse = 1 + Math.sin(frameCount * 0.08) * 0.3;
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 4 * pulse, 0, Math.PI * 2);
+    ctx.arc(0, 0, r + 4 * pulse, 0, Math.PI * 2);
     ctx.strokeStyle = cfg.color;
     ctx.lineWidth = 2;
     ctx.globalAlpha = o.activated ? 0.1 : (0.4 + Math.sin(frameCount * 0.08) * 0.3);
@@ -151,19 +189,21 @@ export function drawOrb(ctx, o, frameCount) {
     ctx.globalAlpha = o.activated ? 0.25 : 1;
   }
 
-  const grad = ctx.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, r);
-  grad.addColorStop(0, "#fff");
-  grad.addColorStop(0.4, cfg.color);
-  grad.addColorStop(1, o.subtype === "black" ? "#111" : cfg.color);
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = getGradient(ctx, `orb|${o.subtype}|${r}`, () => {
+    const grad = ctx.createRadialGradient(-2, -2, 0, 0, 0, r);
+    grad.addColorStop(0, "#fff");
+    grad.addColorStop(0.4, cfg.color);
+    grad.addColorStop(1, o.subtype === "black" ? "#111" : cfg.color);
+    return grad;
+  });
   ctx.shadowColor = cfg.glow;
   ctx.shadowBlur = 12 * shadow;
   ctx.fill();
 
   ctx.beginPath();
-  ctx.arc(cx - 3, cy - 3, r * 0.35, 0, Math.PI * 2);
+  ctx.arc(-3, -3, r * 0.35, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.4)";
   ctx.shadowBlur = 0;
   ctx.fill();
@@ -195,10 +235,12 @@ export function drawCube(ctx, player, isGhost, frameCount, colorObj) {
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = 15 * shadow;
 
-  const cubeGrad = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-  cubeGrad.addColorStop(0, gradStart);
-  cubeGrad.addColorStop(1, gradEnd);
-  ctx.fillStyle = cubeGrad;
+  ctx.fillStyle = getGradient(ctx, `cube|${gradStart}|${gradEnd}`, () => {
+    const cubeGrad = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+    cubeGrad.addColorStop(0, gradStart);
+    cubeGrad.addColorStop(1, gradEnd);
+    return cubeGrad;
+  });
   ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
 
   ctx.strokeStyle = borderColor;
@@ -237,13 +279,15 @@ export function drawShip(ctx, player, isGhost, frameCount, colorObj) {
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = 15 * shadow;
 
-  // Circle body
-  const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
-  circGrad.addColorStop(0, gradStart);
-  circGrad.addColorStop(1, gradEnd);
+  // Circle body (same gradient shape as ball mode — shared cache key)
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fillStyle = circGrad;
+  ctx.fillStyle = getGradient(ctx, `circle|${gradStart}|${gradEnd}`, () => {
+    const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
+    circGrad.addColorStop(0, gradStart);
+    circGrad.addColorStop(1, gradEnd);
+    return circGrad;
+  });
   ctx.fill();
 
   // Border
@@ -296,12 +340,14 @@ export function drawUfo(ctx, player, isGhost, frameCount, colorObj) {
   ctx.shadowBlur = 15 * shadow;
 
   // Saucer body (ellipse)
-  const bodyGrad = ctx.createLinearGradient(0, -ry, 0, ry);
-  bodyGrad.addColorStop(0, gradStart);
-  bodyGrad.addColorStop(1, gradEnd);
   ctx.beginPath();
   ctx.ellipse(0, 4, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = bodyGrad;
+  ctx.fillStyle = getGradient(ctx, `ufo|${gradStart}|${gradEnd}`, () => {
+    const bodyGrad = ctx.createLinearGradient(0, -ry, 0, ry);
+    bodyGrad.addColorStop(0, gradStart);
+    bodyGrad.addColorStop(1, gradEnd);
+    return bodyGrad;
+  });
   ctx.fill();
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = 2;
@@ -356,12 +402,14 @@ export function drawBall(ctx, player, isGhost, frameCount, colorObj) {
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = 15 * shadow;
 
-  const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
-  circGrad.addColorStop(0, gradStart);
-  circGrad.addColorStop(1, gradEnd);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fillStyle = circGrad;
+  ctx.fillStyle = getGradient(ctx, `circle|${gradStart}|${gradEnd}`, () => {
+    const circGrad = ctx.createRadialGradient(-4, -4, 0, 0, 0, r);
+    circGrad.addColorStop(0, gradStart);
+    circGrad.addColorStop(1, gradEnd);
+    return circGrad;
+  });
   ctx.fill();
 
   ctx.strokeStyle = borderColor;
@@ -411,10 +459,12 @@ export function drawMenuCubes(ctx, frameCount, c1, c2) {
   ctx.rotate(Math.sin(frameCount * 0.02) * 0.15);
   ctx.shadowColor = c1.glow;
   ctx.shadowBlur = 15 * shadow;
-  const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-  g1.addColorStop(0, c1.gradStart);
-  g1.addColorStop(1, c1.gradEnd);
-  ctx.fillStyle = g1;
+  ctx.fillStyle = getGradient(ctx, `cube|${c1.gradStart}|${c1.gradEnd}`, () => {
+    const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+    g1.addColorStop(0, c1.gradStart);
+    g1.addColorStop(1, c1.gradEnd);
+    return g1;
+  });
   ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
   ctx.strokeStyle = c1.border;
   ctx.lineWidth = 2;
@@ -444,10 +494,12 @@ export function drawMenuCubes(ctx, frameCount, c1, c2) {
   ctx.rotate(Math.sin(frameCount * 0.02 + 1) * 0.15);
   ctx.shadowColor = c2.glow;
   ctx.shadowBlur = 15 * shadow;
-  const g2 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-  g2.addColorStop(0, c2.gradStart);
-  g2.addColorStop(1, c2.gradEnd);
-  ctx.fillStyle = g2;
+  ctx.fillStyle = getGradient(ctx, `cube|${c2.gradStart}|${c2.gradEnd}`, () => {
+    const g2 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+    g2.addColorStop(0, c2.gradStart);
+    g2.addColorStop(1, c2.gradEnd);
+    return g2;
+  });
   ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
   ctx.strokeStyle = c2.border;
   ctx.lineWidth = 2;

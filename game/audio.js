@@ -12,6 +12,25 @@ function getAudioCtx() {
   return sharedAudioCtx;
 }
 
+let unlocked = false;
+
+// Pre-warm the audio pipeline from a user gesture (click/touch/keydown).
+// Creating the AudioContext lazily on the first in-game sound causes a
+// main-thread hitch right as gameplay starts, and iOS Safari only allows
+// audio to start from inside a gesture. Safe to call repeatedly.
+export function unlockAudio() {
+  const ctx = getAudioCtx();
+  if (!ctx || unlocked) return;
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+    unlocked = true;
+  } catch (e) {}
+}
+
 export function playSound(type) {
   const ctx = getAudioCtx();
   if (!ctx) return;

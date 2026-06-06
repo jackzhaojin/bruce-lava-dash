@@ -3,9 +3,10 @@ import {
   GAME_WIDTH, GAME_HEIGHT, GROUND_Y, CUBE_SIZE,
   JUMP_FORCE, GAME_SPEED_BASE, DEAD_COOLDOWN, REVIVE_FRAMES,
   COLOR_PRESETS, SHIP_FLY_FORCE, SHIP_CEILING_Y, BALL_FLIP_FORCE, UFO_JUMP_FORCE,
+  PAD_TYPES, ORB_TYPES,
 } from "./game/constants.js";
 import { loadHighScores, updateHighScores, fetchHighScores, submitScore } from "./game/highScores.js";
-import { playSound } from "./game/audio.js";
+import { playSound, unlockAudio } from "./game/audio.js";
 import { generateObstacle, generateBlockTower, generateShipObstacle, generateUfoObstacle, generateBallObstacle, generateSandboxBallObstacle } from "./game/obstacles.js";
 import { createPlayer } from "./game/entities.js";
 import { updatePlayer, updateShipPlayer, updateBallPlayer, updateUfoPlayer, checkCollision, checkBoosts, killPlayer, revivePlayer } from "./game/physics.js";
@@ -29,41 +30,47 @@ export default function LavaDash() {
   const keysHeld = useRef({ shiftLeft: false, shiftRight: false, space: false });
   const mouseHeld = useRef(false);
   const touchesRef = useRef(new Map());
-  const gameRef = useRef({
-    state: "menu",
-    playerMode: 2,
-    p1: createPlayer(100, 1),
-    p2: createPlayer(170, 2),
-    obstacles: [],
-    lavaDrops: [],
-    bgLava: [],
-    particles: [],
-    volcanoSmoke: [],
-    score: 0,
-    highScores: loadHighScores(),
-    newRecords: [],
-    distance: 0,
-    nextObstacle: 400,
-    gameSpeed: GAME_SPEED_BASE,
-    level: 1,
-    beatTimer: 0,
-    deadTimer: 0,
-    screenShake: 0,
-    groundOffset: 0,
-    frameCount: 0,
-    starField: Array.from({ length: 30 }, () => ({
-      x: Math.random() * GAME_WIDTH,
-      y: Math.random() * 200,
-      size: Math.random() * 2 + 0.5,
-      speed: Math.random() * 0.3 + 0.1,
-    })),
-  });
+  // Lazy one-time init — a useRef({...}) literal would rebuild this whole
+  // object (localStorage read, players, starfield) on EVERY render just to
+  // throw it away, churning garbage during gameplay.
+  const gameRef = useRef(null);
+  if (gameRef.current === null) {
+    gameRef.current = {
+      state: "menu",
+      playerMode: 2,
+      p1: createPlayer(100, 1),
+      p2: createPlayer(170, 2),
+      obstacles: [],
+      lavaDrops: [],
+      bgLava: [],
+      particles: [],
+      volcanoSmoke: [],
+      score: 0,
+      highScores: loadHighScores(),
+      newRecords: [],
+      distance: 0,
+      nextObstacle: 400,
+      gameSpeed: GAME_SPEED_BASE,
+      level: 1,
+      beatTimer: 0,
+      deadTimer: 0,
+      screenShake: 0,
+      groundOffset: 0,
+      frameCount: 0,
+      starField: Array.from({ length: 30 }, () => ({
+        x: Math.random() * GAME_WIDTH,
+        y: Math.random() * 200,
+        size: Math.random() * 2 + 0.5,
+        speed: Math.random() * 0.3 + 0.1,
+      })),
+    };
+  }
   const animRef = useRef(null);
-  const [displayState, setDisplayState] = useState("menu");
-  const [displayScore, setDisplayScore] = useState(0);
-  const [displayHigh, setDisplayHigh] = useState(() => loadHighScores().allTime);
 
   const selectMode = useCallback((mode) => {
+    // User gesture: create + resume the AudioContext now so the first in-game
+    // sound doesn't hitch the main thread (and iOS allows audio at all)
+    unlockAudio();
     setPlayerMode(mode);
     gameRef.current.playerMode = mode;
     gameRef.current.p1Color = COLOR_PRESETS[p1Color];
@@ -71,6 +78,7 @@ export default function LavaDash() {
   }, [p1Color, p2Color]);
 
   const startGame = useCallback(() => {
+    unlockAudio(); // always reached via a user gesture (key/click/touch)
     const g = gameRef.current;
     if (g.state === "menu") {
       g.state = "playing";
@@ -126,24 +134,16 @@ export default function LavaDash() {
       }
       // In sandbox, delay first obstacle by 250 score (2500 distance)
       if (sandboxStart) g.nextObstacle = 2500;
-      setDisplayState("playing");
-      setDisplayScore(startScore);
     } else if (g.state === "dead") {
       if (g.deadTimer < DEAD_COOLDOWN) return;
       g.state = "menu";
-      setDisplayState("menu");
     }
   }, [sandboxStart]);
 
-  // Fetch cloud high scores on mount
+  // Fetch cloud high scores on mount (menu/HUD read g.cloudScores each frame)
   useEffect(() => {
     fetchHighScores().then((cloud) => {
-      const g = gameRef.current;
-      g.cloudScores = cloud;
-      // Use cloud scores as the display source if they're higher
-      if (cloud.allTime > g.highScores.allTime) {
-        setDisplayHigh(cloud.allTime);
-      }
+      gameRef.current.cloudScores = cloud;
     }).catch(() => {});
   }, []);
 
@@ -196,7 +196,80 @@ export default function LavaDash() {
     lavaGradBall.addColorStop(0.3, "#00cc22");
     lavaGradBall.addColorStop(1, "#006600");
 
+    const menuC1 = gameRef.current.p1Color || COLOR_PRESETS[0];
+    const menuCubeGrad = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
+    menuCubeGrad.addColorStop(0, menuC1.gradStart);
+    menuCubeGrad.addColorStop(1, menuC1.gradEnd);
+
     const isMobile = isTouchDevice;
+
+    // Warm-up pass: pre-render every entity type, gradient, and font once,
+    // run each generator/physics path, then clear the canvas before the first
+    // visible frame. Without this, first-use costs (gradient textures, glyph
+    // rasterization, shadow paths, lazy compilation) land mid-game — exactly
+    // at mode transitions, when the draw functions swap and inputs feel eaten.
+    {
+      const g = gameRef.current;
+      const wc1 = g.p1Color || COLOR_PRESETS[0];
+      const wc2 = g.p2Color || COLOR_PRESETS[1];
+      const warm = createPlayer(100, 1);
+      ctx.save();
+      for (const col of [wc1, wc2]) {
+        for (const draw of [drawCube, drawShip, drawBall, drawUfo]) {
+          draw(ctx, warm, false, 0, col);
+          draw(ctx, warm, true, 0, col);
+        }
+      }
+      const warmGhost = createPlayer(170, 2);
+      warmGhost.alive = false;
+      drawGhostCountdown(ctx, warmGhost, 0, wc2);
+      drawSpike(ctx, 100, GROUND_Y, 30, 40);
+      drawSpike(ctx, 100, SHIP_CEILING_Y, 30, 40, "down");
+      drawSpike(ctx, 100, 200, 30, 40, "left");
+      drawSpike(ctx, 100, 200, 30, 40, "right");
+      drawBlock(ctx, 100, 200, 36, 36, 0);
+      drawBlock(ctx, 100, 200, 36, 36, 1);
+      drawBlock(ctx, 100, 200, 36, 36, null);
+      for (const subtype of Object.keys(PAD_TYPES)) {
+        drawPad(ctx, { x: 100, y: GROUND_Y, w: 56, h: 8, subtype }, 0);
+      }
+      for (const subtype of Object.keys(ORB_TYPES)) {
+        drawOrb(ctx, { x: 100, y: 200, w: 30, h: 30, subtype }, 0);
+      }
+      drawMenuCubes(ctx, 0, wc1, wc2);
+      drawPlayerStatus(ctx, g);
+      drawTouchZoneDivider(ctx, 0);
+      drawVolcano(ctx, -20, 200, 120);
+      drawVolcano(ctx, 250, 160, 90);
+      drawVolcano(ctx, 500, 220, 140);
+      drawVolcano(ctx, 700, 150, 80);
+      // Rasterize digit/letter glyphs for every overlay font size up front
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fff";
+      for (const font of [
+        "bold 72px", "bold 52px", "bold 48px", "bold 28px", "bold 22px",
+        "bold 20px", "bold 16px", "bold 14px", "bold 13px", "bold 12px",
+        "bold 11px", "16px", "14px", "13px",
+      ]) {
+        ctx.font = `${font} 'Courier New', monospace`;
+        ctx.fillText("0123456789 SCORE BEST LVL GAME OVER!", GAME_WIDTH / 2, 200);
+      }
+      ctx.font = "bold 12px monospace";
+      ctx.fillText("0123456789 FPS", GAME_WIDTH / 2, 200);
+      ctx.restore();
+      // Run obstacle generators and physics once so no code path is cold
+      generateObstacle(GAME_WIDTH + 50, 1);
+      generateBlockTower(GAME_WIDTH + 50);
+      generateShipObstacle(GAME_WIDTH + 50);
+      generateUfoObstacle(GAME_WIDTH + 50);
+      generateSandboxBallObstacle(GAME_WIDTH + 50, false);
+      updatePlayer(warm, []);
+      updateShipPlayer(warm, []);
+      updateBallPlayer(warm);
+      updateUfoPlayer(warm, []);
+      checkCollision(warm, []);
+      ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
 
     // DEBUG: FPS counter
     let fpsFrames = 0;
@@ -214,15 +287,12 @@ export default function LavaDash() {
       const result = updateHighScores(g.score);
       g.highScores = result.scores;
       g.newRecords = result.newRecords;
-      setDisplayHigh(g.highScores.allTime);
       // Only submit to Supabase if this was a new record in any category
       if (result.newRecords.length > 0) {
         submitScore(g.score, g.playerMode).then(() =>
           fetchHighScores().then((cloud) => {
             g.cloudScores = cloud;
-            const mergedAllTime = Math.max(g.highScores.allTime, cloud.allTime);
-            g.highScores.allTime = mergedAllTime;
-            setDisplayHigh(mergedAllTime);
+            g.highScores.allTime = Math.max(g.highScores.allTime, cloud.allTime);
           })
         ).catch(() => {});
       }
@@ -244,13 +314,15 @@ export default function LavaDash() {
       }
 
       // At least 1 step per frame (preserves desktop feel),
-      // more if frame was slow (catches up on mobile). Cap at 8.
+      // more if frame was slow (catches up on mobile).
       let steps = 0;
       while (accumulator >= STEP_MS) {
         accumulator -= STEP_MS;
         steps++;
       }
-      if (steps > 16) { steps = 16; accumulator = 0; }
+      // Cap catch-up: more than 8 steps (~64ms) in one frame reads as a
+      // teleport/eaten-input after a GC or tab hitch — drop the excess time.
+      if (steps > 8) { steps = 8; accumulator = 0; }
       stepsDisplay = steps;
 
       const g = gameRef.current;
@@ -375,7 +447,6 @@ export default function LavaDash() {
             g.levelComplete = true;
             g.deadTimer = 0;
             handleDeath(g);
-            setDisplayState("dead");
             g.shipCountdownText = "";
           }
           continue;
@@ -395,7 +466,6 @@ export default function LavaDash() {
 
         // Score
         g.score = Math.floor(g.distance / 10);
-        setDisplayScore(g.score);
 
         // Start win sequence at 10,000
         if (g.score >= 10000) {
@@ -403,7 +473,6 @@ export default function LavaDash() {
           g.winStarted = true;
           g.winCountdown = 300;
           g.obstacles = [];
-          setDisplayScore(10000);
           continue;
         }
 
@@ -679,7 +748,6 @@ export default function LavaDash() {
             g.state = "dead";
             g.deadTimer = 0;
             handleDeath(g);
-            setDisplayState("dead");
           }
         }
 
@@ -690,7 +758,6 @@ export default function LavaDash() {
             g.state = "dead";
             g.deadTimer = 0;
             handleDeath(g);
-            setDisplayState("dead");
           }
         }
 
@@ -841,10 +908,7 @@ export default function LavaDash() {
           ctx.rotate(Math.sin(g.frameCount * 0.02) * 0.15);
           ctx.shadowColor = c1.glow;
           ctx.shadowBlur = isMobile ? 0 : 15;
-          const g1 = ctx.createLinearGradient(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE / 2, CUBE_SIZE / 2);
-          g1.addColorStop(0, c1.gradStart);
-          g1.addColorStop(1, c1.gradEnd);
-          ctx.fillStyle = g1;
+          ctx.fillStyle = menuCubeGrad;
           ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
           ctx.strokeStyle = c1.border;
           ctx.lineWidth = 2;
