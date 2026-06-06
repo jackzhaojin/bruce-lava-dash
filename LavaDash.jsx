@@ -679,6 +679,16 @@ export default function LavaDash() {
               g.p2.prevJumpHeld = false;
               g.p2.gravityFlipped = false;
             }
+            // Safety sweep at the moment ball mode starts: the ball can only
+            // roll on floor or ceiling, so clear any leftover ceiling/ground
+            // spikes (runs before any ball towers exist, so theirs are safe)
+            if (targetMode === "ball") {
+              g.obstacles = g.obstacles.filter((o) => {
+                if (o.type === "spike" && o.direction === "down") return false;
+                if (o.type === "spike" && o.y >= GROUND_Y) return false;
+                return true;
+              });
+            }
             g.nextObstacle = 400;
           } else {
             g.shipCountdownText = `${secs}`;
@@ -690,9 +700,11 @@ export default function LavaDash() {
           if (g.shipCountdownShow === 0) g.shipCountdownText = "";
         }
 
-        // Generate obstacles
+        // Generate obstacles — paused during mode-transition countdowns so the
+        // outgoing mode can't spawn late obstacles that leak into the new mode
+        // (e.g. ship/UFO ceiling+floor spikes arriving after ball mode starts)
         g.nextObstacle -= g.gameSpeed;
-        if (g.nextObstacle <= 0) {
+        if (g.nextObstacle <= 0 && g.shipCountdown <= 0) {
           let newObs;
           if (g.spawnTowerFirst) {
             newObs = generateBlockTower(GAME_WIDTH + 50);
