@@ -58,5 +58,5 @@ LavaDash.jsx         — React component: game loop orchestration, canvas, mode 
 
 ## Do not
 
-- Do not commit or push unless explicitly instructed to
+- Commit and push finished work without asking, after reading the diff for secrets and personal data; never force-push.
 - Do not create markdown files like CHANGES.md in the root
